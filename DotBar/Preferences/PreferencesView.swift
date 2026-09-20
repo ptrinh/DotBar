@@ -98,6 +98,7 @@ struct PreferencesView: View {
         case .stream: parts.append("Stream")
         }
         if !item.dots.isEmpty { parts.append("\(item.dots.count) dot\(item.dots.count > 1 ? "s" : "")") }
+        if !item.showInBar { parts.append("menu only") }
         return parts.joined(separator: " · ")
     }
 

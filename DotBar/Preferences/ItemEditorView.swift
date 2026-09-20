@@ -76,6 +76,22 @@ struct ItemEditorView: View {
             }
 
             Section("Display") {
+                Toggle("Show in menu bar", isOn: $item.showInBar)
+                if !item.showInBar {
+                    Text("Hidden from the bar. Its text and dots appear inside the menu of every other DotBar item.")
+                        .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                LabeledContent("Padding") {
+                    HStack(spacing: 6) {
+                        Text("L").foregroundStyle(.secondary)
+                        TextField("", value: $item.paddingLeft, format: .number).labelsHidden().frame(width: 44).multilineTextAlignment(.trailing)
+                        Stepper("", value: $item.paddingLeft, in: 0...20, step: 1).labelsHidden()
+                        Text("R").foregroundStyle(.secondary).padding(.leading, 8)
+                        TextField("", value: $item.paddingRight, format: .number).labelsHidden().frame(width: 44).multilineTextAlignment(.trailing)
+                        Stepper("", value: $item.paddingRight, in: 0...20, step: 1).labelsHidden()
+                        Text("pt").foregroundStyle(.secondary)
+                    }
+                }
                 Picker("Show", selection: $item.displayMode) {
                     ForEach(DisplayMode.allCases) { Text($0.label).tag($0) }
                 }.pickerStyle(.segmented)

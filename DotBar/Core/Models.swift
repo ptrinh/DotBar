@@ -28,8 +28,13 @@ struct Item: Identifiable, Codable, Hashable {
     var displayMode: DisplayMode = .textAndDots
     /// Shape of each dot.
     var dotStyle: DotStyle = .circle
-    /// Dot size in points (5…9).
+    /// Dot size in points (3…14).
     var dotSize: Double = 6
+    /// false = no status item; the item's text is listed inside the menus of the other DotBar items.
+    var showInBar: Bool = true
+    /// Horizontal padding inside the status item, in points.
+    var paddingLeft: Double = 2
+    var paddingRight: Double = 2
 
     /// 0 for static text and for streams — a stream pushes updates itself, so it has no timer.
     var refreshSeconds: Int {
@@ -48,7 +53,8 @@ struct Item: Identifiable, Codable, Hashable {
          hideWhenEmpty: Bool = false,
          altAction: ClickAction = .menu, middleAction: ClickAction = .menu,
          displayMode: DisplayMode = .textAndDots,
-         dotStyle: DotStyle = .circle, dotSize: Double = 6) {
+         dotStyle: DotStyle = .circle, dotSize: Double = 6,
+         showInBar: Bool = true, paddingLeft: Double = 2, paddingRight: Double = 2) {
         self.id = id; self.name = name; self.enabled = enabled; self.source = source
         self.font = font; self.textColor = textColor; self.dots = dots
         self.dotsPosition = dotsPosition; self.action = action
@@ -58,12 +64,14 @@ struct Item: Identifiable, Codable, Hashable {
         self.altAction = altAction; self.middleAction = middleAction
         self.displayMode = displayMode
         self.dotStyle = dotStyle; self.dotSize = dotSize
+        self.showInBar = showInBar; self.paddingLeft = paddingLeft; self.paddingRight = paddingRight
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, enabled, source, font, textColor, dots, dotsPosition, action, symbol, maxWidth, notify, hotkey
         case hideWhenEmpty
         case altAction, middleAction, displayMode, dotStyle, dotSize
+        case showInBar, paddingLeft, paddingRight
     }
 
     /// Everything is optional with a default so older items.json files keep loading.
@@ -88,6 +96,9 @@ struct Item: Identifiable, Codable, Hashable {
         displayMode = try c.decodeIfPresent(DisplayMode.self, forKey: .displayMode) ?? .textAndDots
         dotStyle = try c.decodeIfPresent(DotStyle.self, forKey: .dotStyle) ?? .circle
         dotSize = try c.decodeIfPresent(Double.self, forKey: .dotSize) ?? 6
+        showInBar = try c.decodeIfPresent(Bool.self, forKey: .showInBar) ?? true
+        paddingLeft = try c.decodeIfPresent(Double.self, forKey: .paddingLeft) ?? 2
+        paddingRight = try c.decodeIfPresent(Double.self, forKey: .paddingRight) ?? 2
     }
 }
 

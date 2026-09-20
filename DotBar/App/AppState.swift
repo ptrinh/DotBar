@@ -443,13 +443,19 @@ final class AppState: ObservableObject {
         }
         for (idx, item) in items.enumerated() {
             if item.enabled {
-                if let c = controllers[item.id] { c.update() }
-                else {
-                    controllers[item.id] = StatusItemController(state: self, itemID: item.id)
-                    // At launch staggeredRefreshAll() does the first run instead, spread out over time.
-                    if !isStarting { refresh(item) }
+                if item.showInBar {
+                    if let c = controllers[item.id] { c.update() }
+                    else {
+                        controllers[item.id] = StatusItemController(state: self, itemID: item.id)
+                        // At launch staggeredRefreshAll() does the first run instead, spread out over time.
+                        if !isStarting { refresh(item) }
+                    }
+                    applyVisibility(item.id)
+                } else {
+                    // Menu-only: no status item, but keep producing output for the other items' menus.
+                    controllers[item.id]?.remove(); controllers[item.id] = nil
+                    if !isStarting, outputs[item.id] == nil { refresh(item) }
                 }
-                applyVisibility(item.id)
                 scheduleTimer(for: item, firstFireDelay: isStarting ? staggerDelay(forIndex: idx) : 0)
             } else {
                 controllers[item.id]?.remove(); controllers[item.id] = nil

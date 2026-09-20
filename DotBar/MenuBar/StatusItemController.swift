@@ -6,6 +6,7 @@ final class StatusItemController: NSObject {
     private unowned let state: AppState
     private let statusItem: NSStatusItem
     private let view = DotBarView()
+    private var leading: NSLayoutConstraint!, trailing: NSLayoutConstraint!
 
     init(state: AppState, itemID: UUID) {
         self.state = state
@@ -16,9 +17,10 @@ final class StatusItemController: NSObject {
         guard let button = statusItem.button else { return }
         view.translatesAutoresizingMaskIntoConstraints = false
         button.addSubview(view)
+        leading = view.leadingAnchor.constraint(equalTo: button.leadingAnchor, constant: 2)
+        trailing = view.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -2)
         NSLayoutConstraint.activate([
-            view.leadingAnchor.constraint(equalTo: button.leadingAnchor, constant: 6),
-            view.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -6),
+            leading, trailing,
             view.topAnchor.constraint(equalTo: button.topAnchor),
             view.bottomAnchor.constraint(equalTo: button.bottomAnchor),
         ])
@@ -34,7 +36,9 @@ final class StatusItemController: NSObject {
         let out = state.output(for: item)
         let colors = state.resolvedDotColors(for: item)
         view.configure(item: item, output: out, dotColors: colors)
-        statusItem.length = view.intrinsicContentSize.width + 12
+        let padL = CGFloat(max(0, item.paddingLeft)), padR = CGFloat(max(0, item.paddingRight))
+        leading.constant = padL; trailing.constant = -padR
+        statusItem.length = view.intrinsicContentSize.width + padL + padR
     }
 
     /// Used by `hideWhenEmpty`: keeps the status item alive but off the bar.
@@ -138,6 +142,7 @@ final class StatusItemController: NSObject {
             }
             menu.addItem(.separator())
         }
+        appendMenuOnlyItems(to: menu)
         menu.addItem(mk("Copy", #selector(menuCopy)))
         menu.addItem(mk("Refresh", #selector(menuRefresh), "r"))
         menu.addItem(.separator())
@@ -251,6 +256,43 @@ final class StatusItemController: NSObject {
               var item = state.binding(for: itemID) else { return }
         item.displayMode = mode
         state.update(item)
+    }
+
+    /// Items configured with "Show in menu bar" off are listed here, with their dot colors as a small swatch.
+    private func appendMenuOnlyItems(to menu: NSMenu) {
+        let hidden = state.items.filter { $0.enabled && !$0.showInBar && $0.id != itemID }
+        guard !hidden.isEmpty else { return }
+        for h in hidden {
+            let out = state.output(for: h)
+            var title = h.name
+            if let t = out?.text, !t.isEmpty { title += ":  " + t }
+            else if out?.failed == true { title += ":  ⚠︎" }
+            let mi = NSMenuItem(title: title, action: #selector(menuOnlyClicked(_:)), keyEquivalent: "")
+            mi.target = self
+            mi.representedObject = h.id
+            let colors = state.resolvedDotColors(for: h)
+            if !colors.isEmpty { mi.image = Self.dotSwatch(colors) }
+            menu.addItem(mi)
+        }
+        menu.addItem(.separator())
+    }
+
+    private static func dotSwatch(_ colors: [NSColor]) -> NSImage {
+        let d: CGFloat = 6, gap: CGFloat = 2
+        let h = CGFloat(colors.count) * d + CGFloat(colors.count - 1) * gap
+        let img = NSImage(size: NSSize(width: d, height: h), flipped: false) { _ in
+            var y = h - d
+            for c in colors { c.setFill(); NSBezierPath(ovalIn: NSRect(x: 0, y: y, width: d, height: d)).fill(); y -= d + gap }
+            return true
+        }
+        img.isTemplate = false
+        return img
+    }
+
+    @objc private func menuOnlyClicked(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? UUID, let h = state.binding(for: id) else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(state.output(for: h)?.text ?? "", forType: .string)
     }
 
     private func mk(_ title: String, _ sel: Selector, _ key: String = "") -> NSMenuItem {
