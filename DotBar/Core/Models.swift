@@ -185,6 +185,20 @@ struct Dot: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var source: DotSource = .mainValue
     var color: ColorSpec = .rules([], fallback: "#8E8E93")
+    /// Optional single character drawn left of the dot, same height as the dot (e.g. C, M, S).
+    var label: String = ""
+
+    init(id: UUID = UUID(), source: DotSource = .mainValue, color: ColorSpec = .rules([], fallback: "#8E8E93"), label: String = "") {
+        self.id = id; self.source = source; self.color = color; self.label = label
+    }
+    enum CodingKeys: String, CodingKey { case id, source, color, label }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        source = try c.decodeIfPresent(DotSource.self, forKey: .source) ?? .mainValue
+        color = try c.decodeIfPresent(ColorSpec.self, forKey: .color) ?? .rules([], fallback: "#8E8E93")
+        label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
+    }
 }
 
 enum DotSource: Codable, Hashable {

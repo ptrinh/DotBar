@@ -290,6 +290,13 @@ struct DotsEditor: View {
         ForEach($dots) { $dot in
             DisclosureGroup {
                 VStack(alignment: .leading, spacing: 10) {
+                    LabeledContent("Label") {
+                        HStack(spacing: 8) {
+                            TextField("", text: Binding(get: { dot.label }, set: { dot.label = String($0.prefix(1)) }), prompt: Text("C"))
+                                .labelsHidden().frame(width: 40).multilineTextAlignment(.center)
+                            Text("one character left of the dot").foregroundStyle(.secondary).font(.caption)
+                        }
+                    }
                     LabeledContent("Value from") {
                         Picker("", selection: Binding(get: { dot.source.isScript ? 1 : 0 }, set: { v in
                             dot.source = v == 0 ? .mainValue : .script(command: "", refreshSeconds: 60)

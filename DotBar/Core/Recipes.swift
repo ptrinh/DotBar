@@ -74,9 +74,9 @@ enum Recipes {
         var i = Item(name: "BTC 3 digits + CPU/RAM dots", source: .script(command: btc, refreshSeconds: 60))
         i.dots = [
             Dot(source: .script(command: cpu, refreshSeconds: 10),
-                color: .gradient(min: 0, max: 100, from: "#FF453A00", to: "#FF453A")),
+                color: .gradient(min: 0, max: 100, from: "#FF453A00", to: "#FF453A"), label: "C"),
             Dot(source: .script(command: ram, refreshSeconds: 15),
-                color: .gradient(min: 0, max: 100, from: "#FFD60A00", to: "#FFD60A")),
+                color: .gradient(min: 0, max: 100, from: "#FFD60A00", to: "#FFD60A"), label: "M"),
         ]
         i.dotSize = 7
         return i

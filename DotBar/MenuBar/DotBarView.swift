@@ -4,6 +4,7 @@ import AppKit
 final class DotBarView: NSView {
     private(set) var text: NSAttributedString = NSAttributedString()
     private(set) var dots: [NSColor] = []
+    private var dotLabels: [NSAttributedString] = []
     private(set) var dotsLeading = false
     private var maxTextWidth: CGFloat = 0
     private var mode: DisplayMode = .textAndDots
@@ -19,6 +20,7 @@ final class DotBarView: NSView {
         mode = output?.displayModeOverride ?? item.displayMode
         text = Self.attributed(item: item, output: output, mode: mode)
         dots = mode.showsDots ? dotColors : []
+        dotLabels = dots.isEmpty ? [] : item.dots.map { Self.dotLabel(String($0.label.prefix(1)), size: CGFloat(item.dotSize)) }
         dotsLeading = item.dotsPosition == .leading
         maxTextWidth = item.maxWidth > 0 ? CGFloat(item.maxWidth) : 0
         dotStyle = item.dotStyle
@@ -29,8 +31,21 @@ final class DotBarView: NSView {
         needsDisplay = true
     }
 
-    /// Width of the dot column for the current style.
-    private var dotColumnWidth: CGFloat { dotStyle == .bar ? Self.barDotWidth : dotSize }
+    /// Width of the dot column for the current style, including the optional label column.
+    private var dotColumnWidth: CGFloat { dotShapeWidth + labelColumnWidth }
+    private var dotShapeWidth: CGFloat { dotStyle == .bar ? Self.barDotWidth : dotSize }
+    /// Widest label (0 when no dot has one) plus a 1pt gap to the dot.
+    private var labelColumnWidth: CGFloat {
+        let w = dotLabels.map { ceil($0.size().width) }.max() ?? 0
+        return w > 0 ? w + 1 : 0
+    }
+
+    /// Label glyph sized so its cap height ≈ the dot diameter.
+    private static func dotLabel(_ ch: String, size: CGFloat) -> NSAttributedString {
+        guard !ch.isEmpty else { return NSAttributedString() }
+        let font = NSFont.systemFont(ofSize: round(size * 1.2), weight: .semibold)
+        return NSAttributedString(string: ch, attributes: [.font: font, .foregroundColor: NSColor.secondaryLabelColor])
+    }
 
     private var badgeSize: NSSize {
         guard !badge.isEmpty else { return .zero }
@@ -75,11 +90,18 @@ final class DotBarView: NSView {
     private func drawDots(atX x: CGFloat, in b: NSRect) {
         let n = CGFloat(dots.count)
         let h = dotSize                                          // bar = same height, 3pt wide
-        let w = dotColumnWidth
+        let w = dotShapeWidth
         let total = n * h + (n - 1) * Self.dotGap
         var y = round((b.height - total) / 2) + total - h        // top dot first
-        let ix = round(x)
-        for c in dots {
+        let lw = labelColumnWidth
+        let ix = round(x + lw)
+        for (i, c) in dots.enumerated() {
+            if lw > 0, i < dotLabels.count, dotLabels[i].length > 0 {
+                let ls = dotLabels[i].size()
+                // Right-align the glyph in the label column; center it on the dot (visual cap height ≈ 0.7 em).
+                let capH = ls.height * 0.72
+                dotLabels[i].draw(at: NSPoint(x: round(x + lw - 1 - ls.width), y: round(y + (h - capH) / 2 - (ls.height - capH) * 0.5)))
+            }
             c.setFill()
             let r = NSRect(x: ix, y: round(y), width: w, height: h)
             switch dotStyle {
