@@ -8,8 +8,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.10"
-    MARKETING_VERSION: "0.1.7"
-    CURRENT_PROJECT_VERSION: "35"
+    MARKETING_VERSION: "0.1.8"
+    CURRENT_PROJECT_VERSION: "37"
     CODE_SIGN_STYLE: Automatic
     CODE_SIGN_IDENTITY: "-"
     ENABLE_HARDENED_RUNTIME: NO
@@ -34,11 +34,9 @@ settings:
       SWIFT_LTO: YES
       # Drop load commands for autolinked dylibs no symbol actually needs.
       OTHER_LDFLAGS: "-Wl,-dead_strip_dylibs"
-      # Strips __swift5_typeref/__swift5_reflstr/__swift5_fieldmd. Verified safe here:
-      # Codable is compile-time synthesized (round-trip + legacy items.json decode both pass)
-      # and the whole SwiftUI Preferences tree renders identically with it on.
-      # See FOOTPRINT.md "Reflection metadata" before touching this.
-      targets:
+      # NOTE: do NOT add -Xfrontend -disable-reflection-metadata. SwiftUI needs reflection
+      # to discover @ObservedObject/@State in views; without it Release builds stop re-rendering.
+targets:
   DotBar:
     type: application
     platform: macOS
