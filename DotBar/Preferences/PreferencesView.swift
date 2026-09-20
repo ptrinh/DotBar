@@ -3,6 +3,7 @@ import SwiftUI
 struct PreferencesView: View {
     @ObservedObject var state: AppState
     @ObservedObject var selection: PreferencesWindowController.SelectionModel
+    @State private var showGlobalHotkey = false
 
     var body: some View {
         NavigationSplitView {
@@ -37,6 +38,18 @@ struct PreferencesView: View {
                     .menuStyle(.borderlessButton).frame(width: 40)
                     .help("Add a ready-made recipe")
                     Spacer()
+                    Button { showGlobalHotkey.toggle() } label: { Image(systemName: "gearshape") }
+                        .popover(isPresented: $showGlobalHotkey, arrowEdge: .top) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Global shortcut").font(.headline)
+                                HotkeyRecorder(label: "Refresh All", hotkey: Binding(
+                                    get: { state.refreshAllHotkey },
+                                    set: { state.refreshAllHotkey = $0 }))
+                                Text("Works anywhere in macOS. At least one modifier is required.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            .padding(12).frame(width: 360)
+                        }
                     Menu {
                         Button("Import…") { importItems() }
                         Button("Export…") { exportItems() }
