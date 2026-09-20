@@ -21,6 +21,14 @@ Custom text and status dots for the macOS menu bar. Minimal by design: ~600 KB b
 
 See [Recipes.md](Recipes.md) for scripts and the full output syntax.
 
+## Install
+
+```sh
+brew install --cask ptrinh/tap/dotbar
+```
+
+Or download the notarized zip from [Releases](https://github.com/ptrinh/DotBar/releases). macOS 14+.
+
 ## Build
 
 Requires Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
