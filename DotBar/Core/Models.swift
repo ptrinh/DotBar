@@ -197,7 +197,10 @@ struct ScriptOutput: Equatable {
     /// Coloured runs for `text` (single plain run when the output has no ANSI codes).
     var textRuns: [ANSIRun] = []
     /// Extra output lines shown at the top of the menu. "----" / "---" means a separator.
+    /// Kept raw: xbar-style `| key=value` params and `--` nesting are parsed when the menu is built.
     var menuLines: [String] = []
+    /// xbar-style params of the bar line (`color=`, `sfimage=`, `href=`, `bash=`, `length=`, …).
+    var barParams: LineParams = LineParams()
     var overrideColor: HexColor? = nil
     var overrideDots: [HexColor]? = nil
     /// SF Symbol name from JSON `"symbol"`.
@@ -238,16 +241,23 @@ struct ScriptOutput: Equatable {
             out.actionOverride = parseAction(obj["action"])
         } else {
             var lines = raw.components(separatedBy: .newlines)
+            var barLine = ""
             if let idx = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) {
-                out.text = lines[idx].trimmingCharacters(in: .whitespaces)
+                barLine = lines[idx]
                 lines.removeFirst(idx + 1)
             } else {
-                out.text = ""
                 lines = []
             }
             // Drop trailing blank lines, keep the inner ones (they may be deliberate spacers).
             while let last = lines.last, last.trimmingCharacters(in: .whitespaces).isEmpty { lines.removeLast() }
             out.menuLines = lines
+
+            // xbar-style inline params on the bar line: text is stripped of them.
+            let parsed = LineParser.parse(barLine, isMenuLine: false)
+            out.barParams = parsed.params
+            out.text = parsed.text
+            out.textRuns = parsed.runs
+            return out
         }
 
         out.textRuns = ANSIParser.parse(out.text)

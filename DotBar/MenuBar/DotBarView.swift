@@ -75,7 +75,9 @@ final class DotBarView: NSView {
         if runs.isEmpty && !s.isEmpty { runs = [ANSIRun(text: s, color: nil, bold: false)] }
 
         var color: NSColor = .labelColor
+        // JSON "color" > inline `| color=` param > rule colour. ANSI runs still win per run.
         if let hex = o?.overrideColor, let c = NSColor(hex: hex) { color = c }
+        else if let c = o?.barParams.color { color = c }
         else if let c = RuleEngine.color(for: item.textColor, output: o) { color = c }
 
         let base = font(item.font)
@@ -86,7 +88,7 @@ final class DotBarView: NSView {
             result.append(NSAttributedString(string: run.text,
                                              attributes: [.font: f, .foregroundColor: run.color ?? color]))
         }
-        if let name = o?.symbol ?? item.symbol, !name.isEmpty,
+        if let name = o?.symbol ?? o?.barParams.sfimage ?? item.symbol, !name.isEmpty,
            let attachment = symbolAttachment(name, color: color, font: base) {
             if result.length > 0 { result.insert(NSAttributedString(string: " "), at: 0) }
             result.insert(attachment, at: 0)

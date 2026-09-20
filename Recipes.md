@@ -20,6 +20,39 @@ rules you set in the editor (range / regex / contains / equals / empty / script 
 For the number-range rules, DotBar parses the **first number** in the output — so `"14%"`,
 `"15.7 ms"` and `"$80574"` all work directly.
 
+## xbar-compatible line params
+
+Every output line — the bar line and each menu line — may end with ` | key=value` pairs, exactly
+like an [xbar](https://xbarapp.com) / SwiftBar plugin. Values with spaces go in quotes.
+Unknown keys are ignored, so existing xbar plugins keep working.
+
+| Key | Effect |
+|---|---|
+| `color=` | `red`, `green`, `blue`, `orange`, `yellow`, `purple`, `pink`, `teal`, `gray`, `white`, `black`, `#RRGGBB`, or a `light,dark` pair like `black,white` |
+| `font=` / `size=` | font family name / point size for that line |
+| `href=` | clicking the line opens the URL |
+| `bash=` + `param1=…paramN=` | clicking runs the command with those arguments |
+| `terminal=true` | run `bash=` visibly in Terminal.app (default: silently) |
+| `refresh=true` | refresh the item after the action ran |
+| `length=N` | truncate the text to N characters with `…` |
+| `trim=false` | keep leading/trailing whitespace |
+| `emojize=false` | leave `:smile:` shortcodes alone (default: replaced, ~60 common codes) |
+| `sfimage=` | SF Symbol shown before the line, e.g. `sfimage=bolt.fill` |
+| `alternate=true` | this line replaces the previous one while ⌥ is held |
+| `dropdown=false` | line is not shown in the menu |
+| `tooltip=` | hover tooltip |
+| `checked=true` | show a checkmark |
+| `disabled=true` | greyed out, not clickable |
+| `md=false`, `symbolize=false` | accepted and ignored |
+
+On the **bar line**, `color=` sets the text colour (ANSI runs still win, the rule colour loses),
+`sfimage=` sets the symbol, `length=` caps the width and `href=`/`bash=` override the left-click
+action. Menu lines with neither `href=` nor `bash=` copy their plain text on click (params, ANSI
+codes stripped).
+
+**Submenus:** a menu line starting with `--` nests under the previous line; `----` nests one level
+deeper, and so on. A line of `---` is a separator; `-----` is a separator inside a submenu.
+
 ---
 
 ## Recipes
@@ -94,6 +127,23 @@ ping -c1 -W2000 1.1.1.1 | sed -nE 's/.*time=([0-9.]+).*/\1 ms/p' || echo "—"
 Any `strftime` format works; see `man strftime`.
 ```sh
 date +"%a %d %H:%M"
+```
+
+### Docker-ish Status Panel — every 30s (params + submenus)
+Shows how inline params and `--` submenus fit together: a coloured bar line with an SF Symbol, a
+submenu of actions, an ⌥ alternate line and a hidden line.
+```sh
+n=$(ls -1 "$HOME" | wc -l | tr -d ' ')
+echo "Home: $n | color=green,white sfimage=folder length=14"
+echo "---"
+echo "Open Home | bash=\"open $HOME\" refresh=true"
+echo "Open Home in Terminal | bash=\"cd $HOME && ls -la\" terminal=true alternate=true"
+echo "Tools | sfimage=wrench"
+echo "--Disk usage :bar_chart: | bash=\"du -sh $HOME\" terminal=true"
+echo "--Docs on the web | href=https://xbarapp.com/docs/"
+echo "-----"
+echo "--Danger zone | color=red disabled=true"
+echo "Bar only, never in the menu | dropdown=false"
 ```
 
 ---
