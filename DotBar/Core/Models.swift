@@ -20,6 +20,16 @@ struct Item: Identifiable, Codable, Hashable {
     var hotkey: Hotkey? = nil
     /// Hide the status item entirely while the output text is empty and no dots are overridden.
     var hideWhenEmpty: Bool = false
+    /// Action for ⌥ + left click.
+    var altAction: ClickAction = .menu
+    /// Action for the middle mouse button.
+    var middleAction: ClickAction = .menu
+    /// What the status item draws: text + dots, dots only, text only, or symbol only.
+    var displayMode: DisplayMode = .textAndDots
+    /// Shape of each dot.
+    var dotStyle: DotStyle = .circle
+    /// Dot size in points (5…9).
+    var dotSize: Double = 6
 
     var refreshSeconds: Int {
         if case .script(_, let s) = source { return s }
@@ -32,18 +42,25 @@ struct Item: Identifiable, Codable, Hashable {
          dotsPosition: DotsPosition = .trailing, action: ClickAction = .menu,
          symbol: String? = nil, maxWidth: Double = 0,
          notify: NotifySpec = .off, hotkey: Hotkey? = nil,
-         hideWhenEmpty: Bool = false) {
+         hideWhenEmpty: Bool = false,
+         altAction: ClickAction = .menu, middleAction: ClickAction = .menu,
+         displayMode: DisplayMode = .textAndDots,
+         dotStyle: DotStyle = .circle, dotSize: Double = 6) {
         self.id = id; self.name = name; self.enabled = enabled; self.source = source
         self.font = font; self.textColor = textColor; self.dots = dots
         self.dotsPosition = dotsPosition; self.action = action
         self.symbol = symbol; self.maxWidth = maxWidth
         self.notify = notify; self.hotkey = hotkey
         self.hideWhenEmpty = hideWhenEmpty
+        self.altAction = altAction; self.middleAction = middleAction
+        self.displayMode = displayMode
+        self.dotStyle = dotStyle; self.dotSize = dotSize
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, enabled, source, font, textColor, dots, dotsPosition, action, symbol, maxWidth, notify, hotkey
         case hideWhenEmpty
+        case altAction, middleAction, displayMode, dotStyle, dotSize
     }
 
     /// Everything is optional with a default so older items.json files keep loading.
@@ -63,6 +80,11 @@ struct Item: Identifiable, Codable, Hashable {
         notify = try c.decodeIfPresent(NotifySpec.self, forKey: .notify) ?? .off
         hotkey = try c.decodeIfPresent(Hotkey.self, forKey: .hotkey)
         hideWhenEmpty = try c.decodeIfPresent(Bool.self, forKey: .hideWhenEmpty) ?? false
+        altAction = try c.decodeIfPresent(ClickAction.self, forKey: .altAction) ?? .menu
+        middleAction = try c.decodeIfPresent(ClickAction.self, forKey: .middleAction) ?? .menu
+        displayMode = try c.decodeIfPresent(DisplayMode.self, forKey: .displayMode) ?? .textAndDots
+        dotStyle = try c.decodeIfPresent(DotStyle.self, forKey: .dotStyle) ?? .circle
+        dotSize = try c.decodeIfPresent(Double.self, forKey: .dotSize) ?? 6
     }
 }
 
@@ -95,6 +117,29 @@ enum Source: Codable, Hashable {
 
 enum DotsPosition: String, Codable, CaseIterable {
     case leading, trailing
+}
+
+/// What the status item draws.
+enum DisplayMode: String, Codable, CaseIterable, Identifiable {
+    case textAndDots, dotsOnly, textOnly, symbolOnly
+    var id: String { rawValue }
+    /// Dots are drawn only in these modes.
+    var showsDots: Bool { self == .textAndDots || self == .dotsOnly }
+    var label: String {
+        switch self {
+        case .textAndDots: return "Text + dots"
+        case .dotsOnly: return "Dots only"
+        case .textOnly: return "Text only"
+        case .symbolOnly: return "Symbol only"
+        }
+    }
+}
+
+/// Shape of each dot.
+enum DotStyle: String, Codable, CaseIterable, Identifiable {
+    case circle, square, bar
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
 }
 
 enum ClickAction: Codable, Hashable {
@@ -209,6 +254,12 @@ struct ScriptOutput: Equatable {
     var refreshOverride: Int? = nil
     /// JSON `"action"`: overrides the item's left-click action.
     var actionOverride: ClickAction? = nil
+    /// JSON `"mode"`: overrides the item's display mode for this update.
+    var displayModeOverride: DisplayMode? = nil
+    /// JSON `"badge"`: small pill at the top-right of the bar content. Max 3 characters.
+    var badge: String? = nil
+    /// JSON `"badgeColor"`: fill colour of the badge (default systemRed).
+    var badgeColor: HexColor? = nil
     var failed: Bool = false
     var errorMessage: String? = nil
     var updatedAt: Date? = nil
@@ -223,7 +274,8 @@ struct ScriptOutput: Equatable {
     /// Parse script output.
     ///
     /// Plain text: first non-empty line is the bar text, the rest become `menuLines`.
-    /// JSON object: `{"text":..,"color":..,"dots":[..],"menu":[..],"symbol":..,"refresh":..,"action":..}`.
+    /// JSON object: `{"text":..,"color":..,"dots":[..],"menu":[..],"symbol":..,"refresh":..,"action":..,
+    /// "mode":..,"badge":..,"badgeColor":..}`.
     static func parse(_ raw: String, failed: Bool = false, error: String? = nil) -> ScriptOutput {
         var out = ScriptOutput(raw: raw, failed: failed, errorMessage: error, updatedAt: Date())
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -239,6 +291,10 @@ struct ScriptOutput: Equatable {
             if let r = obj["refresh"] as? NSNumber, r.intValue > 0 { out.refreshOverride = r.intValue }
             else if let r = obj["refresh"] as? String, let v = Int(r), v > 0 { out.refreshOverride = v }
             out.actionOverride = parseAction(obj["action"])
+            if let m = obj["mode"] as? String, let mode = DisplayMode(rawValue: m) { out.displayModeOverride = mode }
+            if let b = obj["badge"] as? String, !b.isEmpty { out.badge = String(b.prefix(3)) }
+            else if let b = obj["badge"] as? NSNumber { out.badge = String(b.stringValue.prefix(3)) }
+            if let bc = obj["badgeColor"] as? String, !bc.isEmpty { out.badgeColor = bc }
         } else {
             var lines = raw.components(separatedBy: .newlines)
             var barLine = ""
