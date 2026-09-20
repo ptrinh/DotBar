@@ -19,6 +19,7 @@ Item
   action: .none | .copy | .script(command) | .openURL
   notify: .off | .onTextChange | .onDotColorChange | .onAnyChange   (mới)
   hotkey: Hotkey?  — phím tắt global refresh riêng item (mới)
+  hideWhenEmpty: Bool = false  — ẩn hẳn status item khi output rỗng (mới)
 Hotkey
   keyCode: UInt32, modifiers: UInt32 (Carbon flags)
 Dot
@@ -75,3 +76,16 @@ Preferences/
 - JSON override nhận thêm `menu`, `symbol` (SF Symbol vẽ trước text, tint theo màu text), `refresh` (giây, override interval tới khi output sau không còn key), `action` (`"copy"`/`"menu"`/`{"url":…}`/`{"script":…}`) — action trong output thắng action cấu hình.
 - ANSI SGR (`\e[31m`, `\e[1;32m`, `\e[38;5;N m`, `\e[38;2;r;g;b m`, kể cả dạng literal `\e[`/`\033[`/`\x1b[`) → màu/bold từng run; `text` luôn được strip code để rule + parse số không đổi; màu ANSI thắng màu rule ở run đó.
 - `maxWidth` (points, 0 = không giới hạn) cắt text bằng ellipsis đuôi để status item không vượt quá bề ngang đó.
+
+## 6. Runtime
+- **Env vars** cho mọi script: `DOTBAR_ITEM_NAME`, `DOTBAR_ITEM_ID`, `DOTBAR_APPEARANCE` (`dark`/`light`),
+  `DOTBAR_REFRESH_SECONDS`, `DOTBAR_LAST_RUN`, `DOTBAR_LAST_WAKE`, `DOTBAR_VERSION`,
+  `DOTBAR_PREVIOUS_TEXT` (≤512 ký tự). Đổi appearance (KVO `NSApp.effectiveAppearance`) → refresh all 1 lần.
+- **URL scheme** `dotbar://` (Core/URLCommands.swift): `refresh`, `refresh?name=`/`?id=`, `set?name=&text=`,
+  `enable?name=&value=`, `prefs`. Match tên không phân biệt hoa thường.
+- **Stagger**: lúc launch, item thứ N chạy lần đầu trễ `N * 0.7s` (tối đa 5s), timer đầu tiên cũng lệch như vậy.
+  Refresh/Refresh All thủ công vẫn chạy ngay.
+- **Power**: pause timer khi `willSleep`, tạo lại khi wake (trước refresh wake). Low Power Mode
+  (`respectLowPowerMode`, UserDefaults, mặc định true) → interval < 60s nhân 3, tối thiểu 30s.
+- **Concurrency guard**: không chạy lần mới khi lần trước của cùng item/dot chưa xong.
+- `hideWhenEmpty`: text rỗng (sau trim) và không có dots override → `statusItem.isVisible = false`.

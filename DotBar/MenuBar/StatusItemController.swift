@@ -37,6 +37,9 @@ final class StatusItemController: NSObject {
         statusItem.length = view.intrinsicContentSize.width + 12
     }
 
+    /// Used by `hideWhenEmpty`: keeps the status item alive but off the bar.
+    func setVisible(_ visible: Bool) { statusItem.isVisible = visible }
+
     func remove() { NSStatusBar.system.removeStatusItem(statusItem) }
 
     // MARK: Click

@@ -18,6 +18,8 @@ struct Item: Identifiable, Codable, Hashable {
     var maxWidth: Double = 0
     var notify: NotifySpec = .off
     var hotkey: Hotkey? = nil
+    /// Hide the status item entirely while the output text is empty and no dots are overridden.
+    var hideWhenEmpty: Bool = false
 
     var refreshSeconds: Int {
         if case .script(_, let s) = source { return s }
@@ -29,16 +31,19 @@ struct Item: Identifiable, Codable, Hashable {
          textColor: ColorSpec = .fixed(nil), dots: [Dot] = [],
          dotsPosition: DotsPosition = .trailing, action: ClickAction = .menu,
          symbol: String? = nil, maxWidth: Double = 0,
-         notify: NotifySpec = .off, hotkey: Hotkey? = nil) {
+         notify: NotifySpec = .off, hotkey: Hotkey? = nil,
+         hideWhenEmpty: Bool = false) {
         self.id = id; self.name = name; self.enabled = enabled; self.source = source
         self.font = font; self.textColor = textColor; self.dots = dots
         self.dotsPosition = dotsPosition; self.action = action
         self.symbol = symbol; self.maxWidth = maxWidth
         self.notify = notify; self.hotkey = hotkey
+        self.hideWhenEmpty = hideWhenEmpty
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, enabled, source, font, textColor, dots, dotsPosition, action, symbol, maxWidth, notify, hotkey
+        case hideWhenEmpty
     }
 
     /// Everything is optional with a default so older items.json files keep loading.
@@ -57,6 +62,7 @@ struct Item: Identifiable, Codable, Hashable {
         maxWidth = try c.decodeIfPresent(Double.self, forKey: .maxWidth) ?? 0
         notify = try c.decodeIfPresent(NotifySpec.self, forKey: .notify) ?? .off
         hotkey = try c.decodeIfPresent(Hotkey.self, forKey: .hotkey)
+        hideWhenEmpty = try c.decodeIfPresent(Bool.self, forKey: .hideWhenEmpty) ?? false
     }
 }
 

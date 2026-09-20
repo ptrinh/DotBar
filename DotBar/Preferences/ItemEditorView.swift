@@ -92,6 +92,9 @@ struct ItemEditorView: View {
                 HotkeyRecorder(label: "Refresh hotkey", hotkey: $item.hotkey)
                 Text("Global shortcut that refreshes this item. At least one modifier is required.")
                     .font(.caption).foregroundStyle(.secondary)
+                Toggle("Hide when empty", isOn: $item.hideWhenEmpty)
+                Text("Removes the status item from the menu bar while the output is empty.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

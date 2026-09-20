@@ -46,6 +46,9 @@ targets:
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSHumanReadableCopyright: "© 2026 Phil Trinh"
         NSPrincipalClass: NSApplication
+        CFBundleURLTypes:
+          - CFBundleURLName: DotBar URL
+            CFBundleURLSchemes: [dotbar]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ptrinh.DotBar

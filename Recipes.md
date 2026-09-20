@@ -98,6 +98,51 @@ date +"%a %d %H:%M"
 
 ---
 
+## Environment
+
+Every script runs with these variables set:
+
+| Variable | Value |
+| --- | --- |
+| `DOTBAR_ITEM_NAME` | The item's name |
+| `DOTBAR_ITEM_ID` | The item's UUID |
+| `DOTBAR_APPEARANCE` | `dark` or `light` |
+| `DOTBAR_REFRESH_SECONDS` | Current refresh interval |
+| `DOTBAR_LAST_RUN` | Unix seconds of the previous run, empty on the first |
+| `DOTBAR_LAST_WAKE` | Unix seconds of the last system wake, empty if none yet |
+| `DOTBAR_VERSION` | DotBar version |
+| `DOTBAR_PREVIOUS_TEXT` | Previous bar text (max 512 chars) |
+
+```sh
+[ "$DOTBAR_APPEARANCE" = dark ] && echo '{"text":"OK","color":"#8AE234"}' || echo '{"text":"OK","color":"#2E7D32"}'
+```
+
+All items re-run once whenever the system appearance flips.
+
+## Control from outside
+
+DotBar registers the `dotbar://` URL scheme, so any script, Shortcut or app can drive it:
+
+```sh
+open "dotbar://refresh"                          # every item
+open "dotbar://refresh?name=CPU%20Load"          # one item, by name (case-insensitive)
+open "dotbar://refresh?id=<uuid>"                # one item, by id
+open "dotbar://set?name=Build&text=passing"      # push text in, as if the script printed it
+open "dotbar://set?name=Build&text=%7B%22text%22%3A%22FAIL%22%2C%22color%22%3A%22%23FF453A%22%7D"
+open "dotbar://enable?name=Build&value=false"    # disable (value=true to re-enable)
+open "dotbar://prefs"                            # open Preferences
+```
+
+`set` accepts the same JSON as script output when the text starts with `{` (URL-encode it).
+
+## Power and scheduling
+
+- At launch each item's first run is offset by 0.7s per item (max 5s) so scripts do not all fork at once.
+- Timers pause while the Mac sleeps and are re-created on wake, just before the catch-up refresh.
+- In Low Power Mode, intervals under a minute run 3x slower (at least 30s). Turn this off in the gear
+  popover in Preferences.
+- A new run never starts while the previous run of the same item (or dot) is still going.
+
 ## Using a script file
 
 In the item editor's **Script** section, the **…** button opens a file picker. The chosen path is

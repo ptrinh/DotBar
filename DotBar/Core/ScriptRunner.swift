@@ -18,17 +18,20 @@ enum ScriptRunner {
         return env
     }()
 
-    static func run(_ command: String, timeout: TimeInterval = 15) async -> ScriptOutput {
+    /// `extra` is merged on top of the base environment (DOTBAR_* variables).
+    static func run(_ command: String, timeout: TimeInterval = 15, extra: [String: String] = [:]) async -> ScriptOutput {
         await withCheckedContinuation { cont in
-            DispatchQueue.global(qos: .utility).async { cont.resume(returning: runSync(command, timeout: timeout)) }
+            DispatchQueue.global(qos: .utility).async { cont.resume(returning: runSync(command, timeout: timeout, extra: extra)) }
         }
     }
 
-    static func runSync(_ command: String, timeout: TimeInterval) -> ScriptOutput {
+    static func runSync(_ command: String, timeout: TimeInterval, extra: [String: String] = [:]) -> ScriptOutput {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
         p.arguments = ["-c", command]
-        p.environment = environment
+        var env = environment
+        for (k, v) in extra { env[k] = v }
+        p.environment = env
         p.standardInput = FileHandle.nullDevice
         let out = Pipe(), err = Pipe()
         p.standardOutput = out; p.standardError = err

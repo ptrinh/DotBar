@@ -18,6 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if AppState.shared.items.isEmpty { PreferencesWindowController.shared.show() }
     }
 
+    /// dotbar:// URLs (see URLCommands).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls { URLCommands.handle(url) }
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         PreferencesWindowController.shared.show()
         return true

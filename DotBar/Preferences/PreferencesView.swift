@@ -47,6 +47,12 @@ struct PreferencesView: View {
                                     set: { state.refreshAllHotkey = $0 }))
                                 Text("Works anywhere in macOS. At least one modifier is required.")
                                     .font(.caption).foregroundStyle(.secondary)
+                                Divider()
+                                Toggle("Slow down in Low Power Mode", isOn: Binding(
+                                    get: { state.respectLowPowerMode },
+                                    set: { state.respectLowPowerMode = $0 }))
+                                Text("Refresh intervals under a minute run 3x slower (at least 30s) while Low Power Mode is on.")
+                                    .font(.caption).foregroundStyle(.secondary)
                             }
                             .padding(12).frame(width: 360)
                         }

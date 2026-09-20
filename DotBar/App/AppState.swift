@@ -23,9 +23,26 @@ final class AppState: ObservableObject {
     private var registeredHotkeys: [UUID: Hotkey] = [:]
     private static let refreshAllOwner = UUID(uuidString: "00000000-0000-0000-0000-00000000DA1F")!
 
+    /// Runs currently in flight, keyed by item id (main script) or dot id. Guards against pile-ups.
+    private var inFlight: Set<UUID> = []
+    /// When each item's script last started, exported as DOTBAR_LAST_RUN.
+    private var lastRun: [UUID: Date] = [:]
+    /// Last system wake, exported as DOTBAR_LAST_WAKE.
+    private var lastWake: Date?
+    /// True between willSleep and didWake: no timers are scheduled.
+    private var timersPaused = false
+    /// Set during start() so the first refresh of every item is staggered instead of immediate.
+    private var isStarting = false
+    private var appearanceObserver: NSKeyValueObservation?
+
+    /// Spacing between the first run of consecutive items at launch.
+    private static let staggerStep: TimeInterval = 0.7
+    private static let staggerCap: TimeInterval = 5
+
     private init() {}
 
     func start() {
+        isStarting = true
         suppressPersist = true
         items = Store.load()
         suppressPersist = false
@@ -33,22 +50,103 @@ final class AppState: ObservableObject {
         syncHotkeys()
         registerRefreshAllHotkey()
         observeWake()
-        refreshAll()
+        observePower()
+        observeAppearance()
+        isStarting = false
+        staggeredRefreshAll()
     }
 
-    // MARK: Wake
+    /// Launch-time refresh: item N starts N * 0.7s in (capped at 5s) so we don't fork every script at once.
+    private func staggeredRefreshAll() {
+        for (idx, item) in items.enumerated() where item.enabled {
+            let delay = staggerDelay(forIndex: idx)
+            let id = item.id
+            Task { @MainActor [weak self] in
+                if delay > 0 { try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
+                guard let self, let item = self.binding(for: id), item.enabled else { return }
+                self.refresh(item)
+            }
+        }
+    }
+
+    private func staggerDelay(forIndex idx: Int) -> TimeInterval {
+        min(Double(idx) * Self.staggerStep, Self.staggerCap)
+    }
+
+    // MARK: Wake / power
 
     private func observeWake() {
         let nc = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification] {
             nc.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.lastWake = Date()
+                    // Timers were invalidated on sleep; bring them back before the catch-up refresh.
+                    self.timersPaused = false
+                    for item in self.items where item.enabled { self.scheduleTimer(for: item) }
                     // Give the network / VPN a moment to come back before re-running scripts.
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
-                    self?.refreshAll()
+                    self.refreshAll()
                 }
             }
         }
+        nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.pauseTimers() }
+        }
+    }
+
+    private func pauseTimers() {
+        timersPaused = true
+        for (id, t) in timers { t.invalidate(); timers[id] = nil }
+    }
+
+    /// Low Power Mode stretches short intervals; the user can opt out.
+    var respectLowPowerMode: Bool {
+        get { UserDefaults.standard.object(forKey: "respectLowPowerMode") as? Bool ?? true }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: "respectLowPowerMode")
+            rescheduleAllTimers()
+        }
+    }
+
+    private func observePower() {
+        NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange,
+                                               object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.rescheduleAllTimers() }
+        }
+    }
+
+    private func rescheduleAllTimers() {
+        for (id, t) in timers { t.invalidate(); timers[id] = nil }
+        for item in items where item.enabled { scheduleTimer(for: item) }
+    }
+
+    /// Appearance flips (dark <-> light) change what scripts should print, so re-run everything once.
+    private func observeAppearance() {
+        appearanceObserver = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
+            Task { @MainActor [weak self] in self?.refreshAll() }
+        }
+    }
+
+    // MARK: Script environment
+
+    private var appearanceName: String {
+        NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? "dark" : "light"
+    }
+
+    private func scriptEnv(for item: Item) -> [String: String] {
+        [
+            "DOTBAR_ITEM_NAME": item.name,
+            "DOTBAR_ITEM_ID": item.id.uuidString,
+            "DOTBAR_APPEARANCE": appearanceName,
+            "DOTBAR_REFRESH_SECONDS": String(refreshOverrides[item.id] ?? item.refreshSeconds),
+            "DOTBAR_LAST_RUN": lastRun[item.id].map { String(Int($0.timeIntervalSince1970)) } ?? "",
+            "DOTBAR_LAST_WAKE": lastWake.map { String(Int($0.timeIntervalSince1970)) } ?? "",
+            "DOTBAR_VERSION": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
+            "DOTBAR_PREVIOUS_TEXT": String((outputs[item.id]?.text ?? "").prefix(512)),
+        ]
     }
 
     // MARK: Items CRUD
@@ -72,34 +170,65 @@ final class AppState: ObservableObject {
         case .static(let text):
             setOutput(.parse(text), for: id)
         case .script(let command, _):
-            Task.detached(priority: .utility) { [weak self] in
-                let out = await ScriptRunner.run(command)
-                await MainActor.run { self?.setOutput(out, for: id) }
+            // Never stack a second run on a script that is still going.
+            if !inFlight.contains(id) {
+                inFlight.insert(id)
+                lastRun[id] = Date()
+                let env = scriptEnv(for: item)
+                Task.detached(priority: .utility) { [weak self] in
+                    let out = await ScriptRunner.run(command, extra: env)
+                    await MainActor.run {
+                        self?.inFlight.remove(id)
+                        self?.setOutput(out, for: id)
+                    }
+                }
             }
         }
         for dot in item.dots {
             if case .script(let command, _) = dot.source {
                 let dotID = dot.id
+                guard !inFlight.contains(dotID) else { continue }
+                inFlight.insert(dotID)
+                let env = scriptEnv(for: item)
                 Task.detached(priority: .utility) { [weak self] in
-                    let out = await ScriptRunner.run(command)
+                    let out = await ScriptRunner.run(command, extra: env)
                     await MainActor.run {
-                        self?.dotOutputs[dotID] = out
-                        self?.controllers[id]?.update()
-                        self?.checkNotify(id)
+                        guard let self else { return }
+                        self.inFlight.remove(dotID)
+                        self.dotOutputs[dotID] = out
+                        self.controllers[id]?.update()
+                        self.applyVisibility(id)
+                        self.checkNotify(id)
                     }
                 }
             }
         }
     }
 
+    /// Output pushed in from outside (dotbar://set), handled exactly like script output.
+    func applyExternalOutput(_ text: String, for id: UUID) {
+        setOutput(.parse(text), for: id)
+    }
+
     private func setOutput(_ out: ScriptOutput, for id: UUID) {
         outputs[id] = out
         controllers[id]?.update()
+        applyVisibility(id)
         if refreshOverrides[id] != out.refreshOverride {
             refreshOverrides[id] = out.refreshOverride
             if let item = binding(for: id), item.enabled { scheduleTimer(for: item) }
         }
         checkNotify(id)
+    }
+
+    /// `hideWhenEmpty`: drop the status item off the bar while there is nothing to show.
+    private func applyVisibility(_ id: UUID) {
+        guard let item = binding(for: id), let controller = controllers[id] else { return }
+        guard item.hideWhenEmpty else { controller.setVisible(true); return }
+        let out = outputs[id]
+        let empty = (out?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasDotsOverride = !(out?.overrideDots ?? []).isEmpty
+        controller.setVisible(!(empty && !hasDotsOverride))
     }
 
     // MARK: Rendering helper
@@ -220,11 +349,16 @@ final class AppState: ObservableObject {
             c.remove(); controllers[id] = nil; timers[id]?.invalidate(); timers[id] = nil
             refreshOverrides[id] = nil
         }
-        for item in items {
+        for (idx, item) in items.enumerated() {
             if item.enabled {
                 if let c = controllers[item.id] { c.update() }
-                else { controllers[item.id] = StatusItemController(state: self, itemID: item.id); refresh(item) }
-                scheduleTimer(for: item)
+                else {
+                    controllers[item.id] = StatusItemController(state: self, itemID: item.id)
+                    // At launch staggeredRefreshAll() does the first run instead, spread out over time.
+                    if !isStarting { refresh(item) }
+                }
+                applyVisibility(item.id)
+                scheduleTimer(for: item, firstFireDelay: isStarting ? staggerDelay(forIndex: idx) : 0)
             } else {
                 controllers[item.id]?.remove(); controllers[item.id] = nil
                 timers[item.id]?.invalidate(); timers[item.id] = nil
@@ -232,14 +366,24 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func scheduleTimer(for item: Item) {
+    /// Low Power Mode: stretch anything faster than a minute to 3x (never below 30s).
+    private func effectiveInterval(_ interval: Int) -> Int {
+        guard interval > 0, interval < 60, respectLowPowerMode,
+              ProcessInfo.processInfo.isLowPowerModeEnabled else { return interval }
+        return max(30, interval * 3)
+    }
+
+    private func scheduleTimer(for item: Item, firstFireDelay: TimeInterval = 0) {
         var interval = refreshOverrides[item.id] ?? item.refreshSeconds
         for d in item.dots { if case .script(_, let s) = d.source, s > 0 { interval = interval == 0 ? s : min(interval, s) } }
+        interval = effectiveInterval(interval)
+        guard !timersPaused else { timers[item.id]?.invalidate(); timers[item.id] = nil; return }
         if let t = timers[item.id], Int(t.timeInterval) == interval { return }   // unchanged
         timers[item.id]?.invalidate()
         guard interval > 0 else { timers[item.id] = nil; return }
         let id = item.id
-        let t = Timer(timeInterval: TimeInterval(interval), repeats: true) { [weak self] _ in
+        let t = Timer(fire: Date().addingTimeInterval(firstFireDelay + TimeInterval(interval)),
+                      interval: TimeInterval(interval), repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let item = self.binding(for: id) else { return }
                 self.refresh(item)
