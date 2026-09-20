@@ -111,3 +111,11 @@ Preferences/
   (debounce 300ms, `suppressPersist` nên không ghi ngược). `~/Library/Application Support/DotBar/scripts/`
   (tự tạo) đổi → refresh mọi item có command trỏ vào thư mục đó (debounce 500ms).
 - `hideWhenEmpty`: text rỗng (sau trim) và không có dots override → `statusItem.isVisible = false`.
+- **Combined mode** (`combineItems`, `combinedGap` trong UserDefaults, mặc định false / 4pt, gap -6…24):
+  mọi item `enabled && showInBar` vẽ trong **một** NSStatusItem (`MenuBar/CombinedStatusItemController.swift`,
+  autosaveName `DotBar.combined`) để macOS không chèn ~8–10pt giữa các status item. Layout thủ công:
+  x += paddingLeft → đặt DotBarView theo intrinsic width → x += width + paddingRight + gap (không cộng gap sau
+  item cuối); `statusItem.length` = tổng x. Gap âm = các item chồng lên nhau. `hideWhenEmpty` → bỏ item khỏi layout.
+  Click: tìm sub-view chứa toạ độ x (rơi vào gap thì lấy view gần nhất) rồi chạy đúng logic click của item đó
+  (trái/⌥/giữa/phải) — dùng chung `MenuBar/ItemActions.swift` với StatusItemController; menu có thêm submenu
+  **Items** liệt kê mọi item trong slot (click = refresh item đó).

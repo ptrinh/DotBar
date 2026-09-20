@@ -12,6 +12,7 @@ Custom text and status dots for the macOS menu bar. Minimal by design: ~600 KB b
 - **xbar / SwiftBar compatible** line syntax: `Text | color=red href=… bash=… refresh=true sfimage=… length=20`, `--` submenus, `---` separators, ANSI colors, `:emoji:` shortcodes.
 - **JSON output** for full control: `{"text":"42","color":"#hex","dots":["#0f0","#f00"],"symbol":"bolt.fill","menu":[…],"badge":"3","mode":"dotsOnly","refresh":30,"action":{"url":"…"}}`.
 - Left / ⌥ / middle click actions (menu, copy, run script, open URL). Right click is always the menu.
+- **Combined mode**: all items in one menu bar slot with adjustable, even negative, gap.
 - Notifications when text or a dot color changes. Per-item and global refresh hotkeys.
 - Refresh on wake, stagger at launch, slower polling in Low Power Mode, never overlaps a slow script.
 - `dotbar://` URL scheme: `open "dotbar://refresh?name=CPU%20Load"`, `dotbar://set?name=…&text=…`.

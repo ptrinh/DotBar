@@ -55,6 +55,23 @@ struct PreferencesView: View {
                                     set: { state.respectLowPowerMode = $0 }))
                                 Text("Refresh intervals under a minute run 3x slower (at least 30s) while Low Power Mode is on.")
                                     .font(.caption).foregroundStyle(.secondary)
+                                Divider()
+                                Toggle("Combine all items into one menu bar slot", isOn: Binding(
+                                    get: { state.combineItems },
+                                    set: { state.combineItems = $0 }))
+                                Text("macOS spaces separate menu bar items apart; one slot lets you set the gap yourself.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                if state.combineItems {
+                                    LabeledContent("Gap") {
+                                        HStack(spacing: 6) {
+                                            TextField("", value: gapBinding, format: .number)
+                                                .frame(width: 56).multilineTextAlignment(.trailing)
+                                            Stepper("", value: gapBinding, in: -6...24, step: 1).labelsHidden()
+                                            Text("pt (negative = overlap)")
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
                             }
                             .padding(12).frame(width: 360)
                         }
@@ -79,6 +96,10 @@ struct PreferencesView: View {
             }
         }
         .onAppear { if selection.itemID == nil { selection.itemID = state.items.first?.id } }
+    }
+
+    private var gapBinding: Binding<Double> {
+        Binding(get: { state.combinedGap }, set: { state.combinedGap = min(max($0, -6), 24) })
     }
 
     private func addRecipe(named name: String) {

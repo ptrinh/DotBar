@@ -12,6 +12,8 @@ final class AppState: ObservableObject {
     /// Per-item refresh interval coming from JSON `"refresh"`, until an output without it.
     private var refreshOverrides: [UUID: Int] = [:]
     private var controllers: [UUID: StatusItemController] = [:]
+    /// Combined mode: the single status item holding every bar-visible item.
+    private var combined: CombinedStatusItemController?
     private var suppressPersist = false
 
     /// Last state we compared against for notifications. Absent = no output yet,
@@ -136,6 +138,27 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Combined mode: render every bar-visible item inside one NSStatusItem, so macOS
+    /// cannot insert its own ~8–10pt spacing between them.
+    var combineItems: Bool {
+        get { UserDefaults.standard.object(forKey: "combineItems") as? Bool ?? false }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: "combineItems")
+            syncControllers()
+        }
+    }
+
+    /// Spacing between items in combined mode, in points. Negative overlaps them.
+    var combinedGap: Double {
+        get { UserDefaults.standard.object(forKey: "combinedGap") as? Double ?? 4 }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(min(max(newValue, -6), 24), forKey: "combinedGap")
+            combined?.update()
+        }
+    }
+
     private func observePower() {
         NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange,
                                                object: nil, queue: .main) { [weak self] _ in
@@ -224,7 +247,7 @@ final class AppState: ObservableObject {
                         guard let self else { return }
                         self.inFlight.remove(dotID)
                         self.dotOutputs[dotID] = out
-                        self.controllers[id]?.update()
+                        self.refreshBarItem(id)
                         self.applyVisibility(id)
                         self.checkNotify(id)
                     }
@@ -240,7 +263,7 @@ final class AppState: ObservableObject {
 
     private func setOutput(_ out: ScriptOutput, for id: UUID) {
         outputs[id] = out
-        controllers[id]?.update()
+        refreshBarItem(id)
         applyVisibility(id)
         if refreshOverrides[id] != out.refreshOverride {
             refreshOverrides[id] = out.refreshOverride
@@ -251,12 +274,24 @@ final class AppState: ObservableObject {
 
     /// `hideWhenEmpty`: drop the status item off the bar while there is nothing to show.
     private func applyVisibility(_ id: UUID) {
+        // Combined mode: nothing to hide individually, the layout just omits the item.
+        if let combined { combined.update(); return }
         guard let item = binding(for: id), let controller = controllers[id] else { return }
-        guard item.hideWhenEmpty else { controller.setVisible(true); return }
-        let out = outputs[id]
+        controller.setVisible(!shouldHideWhenEmpty(item))
+    }
+
+    /// True when `hideWhenEmpty` is on and the item currently has nothing to draw.
+    func shouldHideWhenEmpty(_ item: Item) -> Bool {
+        guard item.hideWhenEmpty else { return false }
+        let out = outputs[item.id]
         let empty = (out?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasDotsOverride = !(out?.overrideDots ?? []).isEmpty
-        controller.setVisible(!(empty && !hasDotsOverride))
+        return empty && !hasDotsOverride
+    }
+
+    /// Re-render one item on the bar, whichever controller owns it.
+    func refreshBarItem(_ id: UUID) {
+        if let combined { combined.update() } else { controllers[id]?.update() }
     }
 
     // MARK: Rendering helper
@@ -437,13 +472,22 @@ final class AppState: ObservableObject {
 
     private func syncControllers() {
         let ids = Set(items.map(\.id))
-        for (id, c) in controllers where !ids.contains(id) {
-            c.remove(); controllers[id] = nil; timers[id]?.invalidate(); timers[id] = nil
+        for (id, c) in controllers where !ids.contains(id) { c.remove(); controllers[id] = nil }
+        for id in timers.keys where !ids.contains(id) {
+            timers[id]?.invalidate(); timers[id] = nil
             refreshOverrides[id] = nil
+        }
+        let combining = combineItems
+        if combining {
+            // One slot for everything: the per-item status items go away.
+            for (id, c) in controllers { c.remove(); controllers[id] = nil }
+            if combined == nil { combined = CombinedStatusItemController(state: self) }
+        } else if combined != nil {
+            combined?.remove(); combined = nil
         }
         for (idx, item) in items.enumerated() {
             if item.enabled {
-                if item.showInBar {
+                if item.showInBar && !combining {
                     if let c = controllers[item.id] { c.update() }
                     else {
                         controllers[item.id] = StatusItemController(state: self, itemID: item.id)
@@ -452,7 +496,8 @@ final class AppState: ObservableObject {
                     }
                     applyVisibility(item.id)
                 } else {
-                    // Menu-only: no status item, but keep producing output for the other items' menus.
+                    // Menu-only, or combined mode (the combined controller draws it): no status item
+                    // of its own, but keep producing output.
                     controllers[item.id]?.remove(); controllers[item.id] = nil
                     if !isStarting, outputs[item.id] == nil { refresh(item) }
                 }
@@ -462,6 +507,7 @@ final class AppState: ObservableObject {
                 timers[item.id]?.invalidate(); timers[item.id] = nil
             }
         }
+        combined?.update()
     }
 
     /// Low Power Mode: stretch anything faster than a minute to 3x (never below 30s).

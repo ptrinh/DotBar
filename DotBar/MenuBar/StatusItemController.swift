@@ -1,11 +1,14 @@
 import AppKit
 
+/// One NSStatusItem per item — the default (non-combined) mode.
+/// Click handling and menu building live in `ItemActions`, shared with the combined controller.
 @MainActor
 final class StatusItemController: NSObject {
     let itemID: UUID
     private unowned let state: AppState
     private let statusItem: NSStatusItem
     private let view = DotBarView()
+    private let actions: ItemActions
     private var leading: NSLayoutConstraint!, trailing: NSLayoutConstraint!
 
     init(state: AppState, itemID: UUID) {
@@ -13,6 +16,7 @@ final class StatusItemController: NSObject {
         self.itemID = itemID
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.autosaveName = "DotBar.\(itemID.uuidString)"
+        actions = ItemActions(state: state, itemID: itemID, statusItem: statusItem)
         super.init()
         guard let button = statusItem.button else { return }
         view.translatesAutoresizingMaskIntoConstraints = false
@@ -46,272 +50,7 @@ final class StatusItemController: NSObject {
 
     func remove() { NSStatusBar.system.removeStatusItem(statusItem) }
 
-    // MARK: Click
-
     @objc private func clicked(_ sender: NSStatusBarButton) {
-        guard let item = state.binding(for: itemID) else { return }
-        let event = NSApp.currentEvent
-        if event?.type == .rightMouseUp { showMenu(); return }        // right click: always the menu
-        if event?.type == .otherMouseUp { perform(item.middleAction); return }
-        if event?.modifierFlags.contains(.option) == true { perform(item.altAction); return }
-        let out = state.output(for: item)
-        // JSON `"action"` wins, then inline `href=` / `bash=` on the bar line, then the configured action.
-        if let override = out?.actionOverride { perform(override); return }
-        if let p = out?.barParams, p.hasAction { run(p, fallbackCopy: nil); return }
-        perform(item.action)
+        actions.handleClick(NSApp.currentEvent)
     }
-
-    private func perform(_ action: ClickAction) {
-        switch action {
-        case .menu: showMenu()
-        case .copy: copyOutput()
-        case .script(let cmd): Task.detached(priority: .utility) { _ = await ScriptRunner.run(cmd) }
-        case .openURL(let s): if let u = URL(string: s) { NSWorkspace.shared.open(u) }
-        }
-    }
-
-    /// xbar line action: `href=` opens a URL, `bash=` runs a command (optionally in Terminal),
-    /// neither copies the text. `refresh=true` refreshes the item afterwards.
-    private func run(_ p: LineParams, fallbackCopy text: String?) {
-        let wantsRefresh = p.refresh
-        if let href = p.href, let u = URL(string: href) {
-            NSWorkspace.shared.open(u)
-        } else if let cmd = p.shellCommand {
-            if p.terminal {
-                Self.runInTerminal(cmd)
-            } else {
-                Task { [weak self] in
-                    _ = await ScriptRunner.run(cmd)
-                    guard wantsRefresh, let self, let item = self.state.binding(for: self.itemID) else { return }
-                    self.state.refresh(item)
-                }
-                return
-            }
-        } else if let text {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
-        }
-        if wantsRefresh, let item = state.binding(for: itemID) { state.refresh(item) }
-    }
-
-    /// Run a command in Terminal.app through a throwaway `.command` script.
-    private static func runInTerminal(_ command: String) {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("dotbar-\(UUID().uuidString).command")
-        let body = "#!/bin/zsh\n\(command)\n"
-        guard (try? body.write(to: url, atomically: true, encoding: .utf8)) != nil else { return }
-        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
-        let path = url.path
-        Task.detached(priority: .utility) {
-            _ = await ScriptRunner.run("open -a Terminal \(LineParams.shellQuote(path))")
-        }
-    }
-
-    private func showMenu() {
-        statusItem.menu = buildMenu()
-        statusItem.button?.performClick(nil)
-        statusItem.menu = nil
-    }
-
-    private func copyOutput() {
-        guard let item = state.binding(for: itemID) else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(state.output(for: item)?.text ?? "", forType: .string)
-    }
-
-    // MARK: Menu
-
-    private static let updatedFormatter: DateFormatter = {
-        let df = DateFormatter(); df.dateStyle = .short; df.timeStyle = .medium; return df
-    }()
-
-    private func buildMenu() -> NSMenu {
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        guard let item = state.binding(for: itemID) else { return menu }
-        if let out = state.output(for: item) {
-            // Extra output lines first, TextBar style: click one to copy it.
-            if !out.menuLines.isEmpty {
-                appendLines(out.menuLines, to: menu)
-                menu.addItem(.separator())
-            }
-            let df = Self.updatedFormatter
-            menu.addItem(withTitle: "Updated: \(out.updatedAt.map(df.string(from:)) ?? "—")", action: nil, keyEquivalent: "").isEnabled = false
-            if out.failed, let err = out.errorMessage {
-                menu.addItem(withTitle: "Error: \(err.prefix(120))", action: nil, keyEquivalent: "").isEnabled = false
-            }
-            menu.addItem(.separator())
-        }
-        appendMenuOnlyItems(to: menu)
-        menu.addItem(mk("Copy", #selector(menuCopy)))
-        menu.addItem(mk("Refresh", #selector(menuRefresh), "r"))
-        menu.addItem(.separator())
-        menu.addItem(mk("Refresh All", #selector(menuRefreshAll), "R"))
-        menu.addItem(.separator())
-        menu.addItem(displayMenuItem(for: item))
-        menu.addItem(.separator())
-        menu.addItem(mk("Edit \"\(item.name)\"…", #selector(menuEdit), "e"))
-        menu.addItem(mk("Preferences…", #selector(menuPrefs), ","))
-        menu.addItem(mk(LaunchAtLogin.isEnabled ? "Launch at Login ✓" : "Launch at Login", #selector(menuLogin)))
-        menu.addItem(mk("About DotBar", #selector(menuAbout)))
-        menu.addItem(.separator())
-        menu.addItem(mk("Quit DotBar", #selector(menuQuit), "q"))
-        return menu
-    }
-
-    /// Output lines, xbar style: `--` nesting builds submenus, `| key=value` params style them.
-    private func appendLines(_ lines: [String], to menu: NSMenu) {
-        var stack: [NSMenu] = [menu]
-        var lastItems: [NSMenuItem?] = [nil]
-        for raw in lines {
-            let pl = LineParser.parse(raw)
-            guard pl.params.dropdown else { continue }              // dropdown=false: bar only
-            var d = pl.depth
-            if d < stack.count - 1 {                                // back out to a shallower level
-                stack.removeLast(stack.count - 1 - d)
-                lastItems.removeLast(lastItems.count - 1 - d)
-            }
-            while d > stack.count - 1 {                             // nest under the previous line
-                guard let parent = lastItems[stack.count - 1] else { break }
-                let sub = parent.submenu ?? NSMenu()
-                sub.autoenablesItems = false
-                parent.submenu = sub
-                stack.append(sub)
-                lastItems.append(nil)
-            }
-            d = min(d, stack.count - 1)
-            if pl.isSeparator { stack[d].addItem(.separator()); continue }
-            let mi = menuLineItem(pl)
-            stack[d].addItem(mi)
-            lastItems[d] = mi
-        }
-    }
-
-    /// One output line: ANSI colours + inline params preserved, plain text copied on click.
-    private func menuLineItem(_ pl: ParsedLine) -> NSMenuItem {
-        let p = pl.params
-        let m = NSMenuItem(title: pl.text, action: #selector(lineClicked(_:)), keyEquivalent: "")
-        m.target = self
-        m.representedObject = pl
-
-        let base = lineFont(p)
-        let styled = p.color != nil || p.fontName != nil || p.size != nil
-        if styled || pl.runs.contains(where: { $0.color != nil || $0.bold }) {
-            let bold = NSFontManager.shared.convert(base, toHaveTrait: .boldFontMask)
-            let s = NSMutableAttributedString()
-            for r in pl.runs {
-                // ANSI colour wins per run over the line's `color=` param.
-                s.append(NSAttributedString(string: r.text, attributes: [
-                    .font: r.bold ? bold : base,
-                    .foregroundColor: r.color ?? p.color ?? NSColor.labelColor,
-                ]))
-            }
-            if s.length > 0 { m.attributedTitle = s }
-        }
-        if let name = p.sfimage, !name.isEmpty,
-           let img = NSImage(systemSymbolName: name, accessibilityDescription: nil) {
-            img.isTemplate = true
-            m.image = img
-        }
-        if let t = p.tooltip { m.toolTip = t }
-        if p.checked { m.state = .on }
-        if p.disabled { m.isEnabled = false }
-        if p.alternate {
-            m.isAlternate = true
-            m.keyEquivalentModifierMask = .option
-        }
-        return m
-    }
-
-    private func lineFont(_ p: LineParams) -> NSFont {
-        let size = p.size.map { CGFloat($0) } ?? NSFont.systemFontSize
-        if let name = p.fontName, !name.isEmpty, let f = NSFont(name: name, size: size) { return f }
-        return p.size != nil ? NSFont.menuFont(ofSize: size) : NSFont.menuFont(ofSize: 0)
-    }
-
-    @objc private func lineClicked(_ sender: NSMenuItem) {
-        guard let pl = sender.representedObject as? ParsedLine else { return }
-        run(pl.params, fallbackCopy: pl.text)
-    }
-
-    /// "Display" submenu: pick the display mode, persisted through `state.update`.
-    private func displayMenuItem(for item: Item) -> NSMenuItem {
-        let parent = NSMenuItem(title: "Display", action: nil, keyEquivalent: "")
-        let sub = NSMenu()
-        sub.autoenablesItems = false
-        for mode in DisplayMode.allCases {
-            let mi = NSMenuItem(title: mode.label, action: #selector(menuSetDisplayMode(_:)), keyEquivalent: "")
-            mi.target = self
-            mi.representedObject = mode.rawValue
-            mi.state = mode == item.displayMode ? .on : .off
-            sub.addItem(mi)
-        }
-        parent.submenu = sub
-        return parent
-    }
-
-    @objc private func menuSetDisplayMode(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String,
-              let mode = DisplayMode(rawValue: raw),
-              var item = state.binding(for: itemID) else { return }
-        item.displayMode = mode
-        state.update(item)
-    }
-
-    /// Items configured with "Show in menu bar" off are listed here, with their dot colors as a small swatch.
-    private func appendMenuOnlyItems(to menu: NSMenu) {
-        let hidden = state.items.filter { $0.enabled && !$0.showInBar && $0.id != itemID }
-        guard !hidden.isEmpty else { return }
-        for h in hidden {
-            let out = state.output(for: h)
-            var title = h.name
-            if let t = out?.text, !t.isEmpty { title += ":  " + t }
-            else if out?.failed == true { title += ":  ⚠︎" }
-            let mi = NSMenuItem(title: title, action: #selector(menuOnlyClicked(_:)), keyEquivalent: "")
-            mi.target = self
-            mi.representedObject = h.id
-            let colors = state.resolvedDotColors(for: h)
-            if !colors.isEmpty { mi.image = Self.dotSwatch(colors) }
-            menu.addItem(mi)
-        }
-        menu.addItem(.separator())
-    }
-
-    private static func dotSwatch(_ colors: [NSColor]) -> NSImage {
-        let d: CGFloat = 6, gap: CGFloat = 2
-        let h = CGFloat(colors.count) * d + CGFloat(colors.count - 1) * gap
-        let img = NSImage(size: NSSize(width: d, height: h), flipped: false) { _ in
-            var y = h - d
-            for c in colors { c.setFill(); NSBezierPath(ovalIn: NSRect(x: 0, y: y, width: d, height: d)).fill(); y -= d + gap }
-            return true
-        }
-        img.isTemplate = false
-        return img
-    }
-
-    @objc private func menuOnlyClicked(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? UUID, let h = state.binding(for: id) else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(state.output(for: h)?.text ?? "", forType: .string)
-    }
-
-    private func mk(_ title: String, _ sel: Selector, _ key: String = "") -> NSMenuItem {
-        let m = NSMenuItem(title: title, action: sel, keyEquivalent: key); m.target = self; return m
-    }
-
-    @objc private func menuCopy() { copyOutput() }
-    @objc private func menuRefresh() { if let i = state.binding(for: itemID) { state.refresh(i) } }
-    @objc private func menuRefreshAll() { state.refreshAll() }
-    @objc private func menuEdit() { PreferencesWindowController.shared.show(selecting: itemID) }
-    @objc private func menuPrefs() { PreferencesWindowController.shared.show() }
-    @objc private func menuLogin() { LaunchAtLogin.toggle() }
-    @objc private func menuAbout() {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(options: [
-            .credits: NSAttributedString(string: "Custom text and status dots for the macOS menu bar.",
-                                         attributes: [.font: NSFont.systemFont(ofSize: 11)]),
-            NSApplication.AboutPanelOptionKey(rawValue: "Copyright"): "© 2026 Phil Trinh. All rights reserved.",
-        ])
-    }
-    @objc private func menuQuit() { NSApp.terminate(nil) }
 }
