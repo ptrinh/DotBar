@@ -155,6 +155,109 @@ Any `strftime` format works; see `man strftime`.
 date +"%a %d %H:%M"
 ```
 
+### Swap Used — every 30s
+```sh
+sysctl vm.swapusage | sed -n 's/.*used = \([0-9.]*\)M.*/\1/p' | awk '{printf "%.0f MB", $1}'
+```
+
+### Load Average — every 10s (gradient dot 2 → 12)
+```sh
+sysctl -n vm.loadavg | awk '{print $2}'
+```
+
+### Prevent Sleep — every 30s
+"On" while any process holds a sleep assertion (caffeinate, video calls).
+```sh
+pmset -g assertions | grep -Eq 'PreventUserIdleSystemSleep +1' && echo "☕︎ On" || echo "Off"
+```
+
+### Appearance — every 60s
+```sh
+defaults read -g AppleInterfaceStyle 2>/dev/null || echo Light
+```
+
+### Displays — every 120s (Homebrew build)
+```sh
+system_profiler SPDisplaysDataType 2>/dev/null | grep -c Resolution
+```
+
+### Bluetooth Battery — every 300s (Homebrew build)
+First device that reports a battery level. `system_profiler` takes a few seconds, keep the interval long.
+```sh
+system_profiler SPBluetoothDataType 2>/dev/null | awk '/Battery Level/{print $NF; exit}'
+```
+
+### Time Machine — every 600s (Homebrew build)
+```sh
+tmutil latestbackup 2>/dev/null | sed -E 's/.*\/([0-9]{4}-[0-9]{2}-[0-9]{2})-([0-9]{2})([0-9]{2}).*/\1 \2:\3/' | grep . || echo "no backup"
+```
+
+### VPN — every 30s (Homebrew build)
+```sh
+n=$(scutil --nc list | grep -c '(Connected)'); [ "$n" -gt 0 ] && echo "VPN on" || echo "VPN off"
+```
+
+### Network Throughput — every 3s (Homebrew build)
+Download rate on en0 from two `netstat` samples.
+```sh
+a=$(netstat -ib | awk '/en0/{print $7; exit}'); sleep 1; b=$(netstat -ib | awk '/en0/{print $7; exit}'); echo "↓ $(( (b-a)/1024 )) KB/s"
+```
+
+### ETH / USD — every 60s
+```sh
+curl -s --max-time 8 https://api.coinbase.com/v2/prices/ETH-USD/spot | sed -E 's/.*"amount":"([0-9]+)[."].*/$\1/'
+```
+
+### Stock Quote — every 300s
+Replace `AAPL` with any Yahoo Finance ticker.
+```sh
+curl -s --max-time 8 -A "Mozilla/5.0" "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?range=1d&interval=1d" | sed -n 's/.*"regularMarketPrice":\([0-9.]*\).*/\1/p' | head -1
+```
+
+### Exchange Rates — every 3600s
+Bar shows 1 USD in VND; the dropdown lists the major USD pairs (EUR/USD, GBP/USD, AUD/USD, USD/JPY, USD/CNY, USD/SGD, USD/CAD) and then each currency in VND. One request to open.er-api.com.
+```sh
+curl -s --max-time 8 "https://open.er-api.com/v6/latest/USD" | tr ',' '\n' | sed -nE 's/.*"(VND|EUR|CNY|JPY|SGD|GBP|CAD|AUD)":([0-9.]+).*/\1 \2/p' | awk '{r[$1]=$2} END{ if (r["VND"]==0) {print "—"; exit} printf "$ %\047.0f ₫\n", r["VND"]; printf "EUR/USD  %.4f\nGBP/USD  %.4f\nAUD/USD  %.4f\nUSD/JPY  %.2f\nUSD/CNY  %.4f\nUSD/SGD  %.4f\nUSD/CAD  %.4f\n----\n", 1/r["EUR"], 1/r["GBP"], 1/r["AUD"], r["JPY"], r["CNY"], r["SGD"], r["CAD"]; split("EUR GBP AUD JPY CNY SGD CAD",c," "); for(i=1;i<=7;i++){k=c[i]; printf "%s  %\047.0f ₫\n", k, r["VND"]/r[k]} }'
+```
+
+### Gold XAU / USD — every 900s
+```sh
+curl -s --max-time 8 https://api.gold-api.com/price/XAU | sed -n 's/.*"price":\([0-9.]*\).*/\1/p'
+```
+
+### Weather — every 900s
+Location from your IP; or `wttr.in/Hanoi?format=%t+%C`.
+```sh
+curl -s --max-time 8 "wttr.in/?format=%t+%C" || echo "—"
+```
+
+### Air Quality — every 1800s
+US AQI from Open-Meteo, no key. Replace the coordinates.
+```sh
+curl -s --max-time 8 "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=10.82&longitude=106.63&current=us_aqi" | sed -n 's/.*"us_aqi":\([0-9]*\).*/\1/p'
+```
+
+### World Clock — every 30s
+```sh
+TZ="America/New_York" date +"NY %H:%M"
+```
+
+### Countdown — every 3600s
+```sh
+d=$(date -j -f "%Y-%m-%d" "2026-12-25" +%s); echo "$(( (d - $(date +%s)) / 86400 ))d"
+```
+
+## Recipes that need a third-party CLI (not built in)
+```sh
+gh api notifications 2>/dev/null | grep -c '"unread":true'          # GitHub unread notifications (gh)
+brew outdated 2>/dev/null | wc -l | tr -d ' '                         # Homebrew outdated formulae
+docker ps -q 2>/dev/null | wc -l | tr -d ' '                          # running Docker containers
+osascript -e 'tell application "Music" to if player state is playing then get artist of current track & " – " & name of current track' 2>/dev/null
+osascript -e 'tell application "Mail" to get unread count of inbox' 2>/dev/null
+# GitHub Actions last run (needs a token; works in the sandbox because it is plain curl)
+curl -s --max-time 8 -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/OWNER/REPO/actions/runs?per_page=1" | sed -n 's/.*"conclusion":"\([a-z_]*\)".*/\1/p' | head -1
+```
+
 ### Docker-ish Status Panel — every 30s (params + submenus)
 Shows how inline params and `--` submenus fit together: a coloured bar line with an SF Symbol, a
 submenu of actions, an ⌥ alternate line and a hidden line.

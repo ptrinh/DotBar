@@ -19,12 +19,20 @@ enum Recipes {
     }
 
     /// Recipes whose commands the App Sandbox denies (ping raw sockets, git via xcrun, ipconfig SSID).
-    private static let sandboxUnavailable: Set<String> = ["Ping 1.1.1.1", "Ping stream", "Git Branch", "Wi-Fi SSID"]
+    private static let sandboxUnavailable: Set<String> = ["Ping 1.1.1.1", "Ping stream", "Git Branch", "Wi-Fi SSID",
+                                                          "Network Throughput", "VPN", "Time Machine", "Displays", "Bluetooth Battery"]
 
     static func all() -> [Item] {
-        [cpuLoad, memoryUsed, battery, publicIP, localIP, wifiSSID,
-         btcPrice, btc3Digits, btcWithLoadDots, diskFree, uptime, gitBranch, ping, clock,
-         pingStream, logTail]
+        [// System
+         cpuLoad, memoryUsed, swapUsed, loadAverage, battery, diskFree, uptime, caffeinate, darkMode, displays, bluetoothBattery, timeMachine,
+         // Network
+         publicIP, localIP, wifiSSID, vpn, networkThroughput, ping,
+         // Finance
+         btcPrice, btc3Digits, btcWithLoadDots, ethPrice, stockQuote, exchangeRates, goldPrice,
+         // Weather & time
+         weather, airQuality, clock, worldClock, countdown,
+         // Dev & streaming
+         gitBranch, pingStream, logTail]
             .filter { !isSandboxed || !sandboxUnavailable.contains($0.name) }
     }
 
@@ -146,6 +154,140 @@ enum Recipes {
     private static var logTail: Item {
         let cmd = #"tail -F "$HOME/Library/Logs/example.log" | while read l; do echo "${l:0:40}"; echo '~~~'; done"#
         return Item(name: "Log tail", source: .stream(command: cmd))
+    }
+
+
+    // MARK: - System (added 0.1.14)
+
+    private static var swapUsed: Item {
+        var i = Item(name: "Swap Used",
+                     source: .script(command: #"sysctl vm.swapusage | sed -n 's/.*used = \([0-9.]*\)M.*/\1/p' | awk '{printf "%.0f MB", $1}'"#,
+                                     refreshSeconds: 30))
+        i.dots = [dot(ranges: [(nil, 1024, green), (1024, 4096, orange), (4096, nil, red)])]
+        return i
+    }
+
+    private static var loadAverage: Item {
+        var i = Item(name: "Load Average",
+                     source: .script(command: #"sysctl -n vm.loadavg | awk '{print $2}'"#, refreshSeconds: 10))
+        i.dots = [Dot(color: .gradient(min: 2, max: 12, from: "#34C759", to: "#FF453A"))]
+        return i
+    }
+
+    /// "On" while something holds a PreventUserIdleSystemSleep assertion (caffeinate, a video call, …).
+    private static var caffeinate: Item {
+        var i = Item(name: "Prevent Sleep",
+                     source: .script(command: #"pmset -g assertions | grep -Eq 'PreventUserIdleSystemSleep +1' && echo "☕︎ On" || echo "Off""#,
+                                     refreshSeconds: 30))
+        i.dots = [Dot(color: .rules([Rule(condition: .contains(text: "On"), color: orange)], fallback: "#8E8E93"))]
+        return i
+    }
+
+    private static var darkMode: Item {
+        Item(name: "Appearance",
+             source: .script(command: #"defaults read -g AppleInterfaceStyle 2>/dev/null || echo Light"#, refreshSeconds: 60))
+    }
+
+    private static var displays: Item {
+        Item(name: "Displays",
+             source: .script(command: #"system_profiler SPDisplaysDataType 2>/dev/null | grep -c Resolution | sed 's/$/ 🖥/'"#,
+                             refreshSeconds: 120))
+    }
+
+    /// First Bluetooth device reporting a battery level (AirPods, Magic Mouse, …). system_profiler is slow: keep the interval long.
+    private static var bluetoothBattery: Item {
+        var i = Item(name: "Bluetooth Battery",
+                     source: .script(command: #"system_profiler SPBluetoothDataType 2>/dev/null | awk '/Battery Level/{print $NF; exit}'"#,
+                                     refreshSeconds: 300))
+        i.dots = [dot(ranges: [(nil, 20, red), (20, 50, orange), (50, nil, green)])]
+        i.symbol = "headphones"
+        return i
+    }
+
+    private static var timeMachine: Item {
+        Item(name: "Time Machine",
+             source: .script(command: #"tmutil latestbackup 2>/dev/null | sed -E 's/.*\/([0-9]{4}-[0-9]{2}-[0-9]{2})-([0-9]{2})([0-9]{2}).*/\1 \2:\3/' | grep . || echo "no backup""#,
+                             refreshSeconds: 600))
+    }
+
+    // MARK: - Network (added 0.1.14)
+
+    private static var vpn: Item {
+        var i = Item(name: "VPN",
+                     source: .script(command: #"n=$(scutil --nc list | grep -c '(Connected)'); [ "$n" -gt 0 ] && echo "VPN on" || echo "VPN off""#,
+                                     refreshSeconds: 30))
+        i.dots = [Dot(color: .rules([Rule(condition: .contains(text: "on"), color: green)], fallback: "#8E8E93"))]
+        return i
+    }
+
+    /// Download rate on en0: two netstat samples one second apart.
+    private static var networkThroughput: Item {
+        var i = Item(name: "Network Throughput",
+                     source: .script(command: #"a=$(netstat -ib | awk '/en0/{print $7; exit}'); sleep 1; b=$(netstat -ib | awk '/en0/{print $7; exit}'); kb=$(( (b-a)/1024 )); [ $kb -ge 1024 ] && printf "↓ %.1f MB/s" $(echo "$kb/1024" | bc -l) || echo "↓ $kb KB/s""#,
+                                     refreshSeconds: 3))
+        i.dots = [Dot(color: .gradient(min: 0, max: 5000, from: "#34C75940", to: "#0A84FF"))]
+        return i
+    }
+
+    // MARK: - Finance (added 0.1.14)
+
+    private static var ethPrice: Item {
+        Item(name: "ETH/USD",
+             source: .script(command: #"curl -s --max-time 8 https://api.coinbase.com/v2/prices/ETH-USD/spot | sed -E 's/.*"amount":"([0-9]+)[."].*/$\1/'"#,
+                             refreshSeconds: 60))
+    }
+
+    /// Change AAPL to any Yahoo Finance ticker (VNM, NVDA, ^GSPC, VN30F1M.VN …).
+    private static var stockQuote: Item {
+        Item(name: "Stock Quote (AAPL)",
+             source: .script(command: #"curl -s --max-time 8 -A "Mozilla/5.0" "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?range=1d&interval=1d" | sed -n 's/.*"regularMarketPrice":\([0-9.]*\).*/\1/p' | head -1 | awk '{printf "AAPL %.2f", $1}'"#,
+                             refreshSeconds: 300))
+    }
+
+    /// Bar: 1 USD in VND. Menu: major USD pairs (EUR/USD, GBP/USD, AUD/USD, USD/JPY, USD/CNY, USD/SGD, USD/CAD), then each in VND.
+    private static var exchangeRates: Item {
+        let cmd = #"curl -s --max-time 8 "https://open.er-api.com/v6/latest/USD" | tr ',' '\n' | sed -nE 's/.*"(VND|EUR|CNY|JPY|SGD|GBP|CAD|AUD)":([0-9.]+).*/\1 \2/p' | awk '{r[$1]=$2} END{ if (r["VND"]==0) {print "—"; exit} printf "$ %\047.0f ₫\n", r["VND"]; printf "EUR/USD  %.4f\nGBP/USD  %.4f\nAUD/USD  %.4f\nUSD/JPY  %.2f\nUSD/CNY  %.4f\nUSD/SGD  %.4f\nUSD/CAD  %.4f\n----\n", 1/r["EUR"], 1/r["GBP"], 1/r["AUD"], r["JPY"], r["CNY"], r["SGD"], r["CAD"]; split("EUR GBP AUD JPY CNY SGD CAD",c," "); for(i=1;i<=7;i++){k=c[i]; printf "%s  %\047.0f ₫\n", k, r["VND"]/r[k]} }'"#
+        var i = Item(name: "Exchange Rates", source: .script(command: cmd, refreshSeconds: 3600))
+        i.font.monospacedDigits = true
+        return i
+    }
+
+    private static var goldPrice: Item {
+        Item(name: "Gold XAU/USD",
+             source: .script(command: #"curl -s --max-time 8 https://api.gold-api.com/price/XAU | sed -n 's/.*"price":\([0-9.]*\).*/\1/p' | awk '{printf "Au $%\047.0f", $1}'"#,
+                             refreshSeconds: 900))
+    }
+
+    // MARK: - Weather & time (added 0.1.14)
+
+    /// wttr.in picks your location from the IP. Append a city: wttr.in/Hanoi?format=…
+    private static var weather: Item {
+        Item(name: "Weather",
+             source: .script(command: #"curl -s --max-time 8 "wttr.in/?format=%t+%C" | sed 's/^+//' || echo "—""#,
+                             refreshSeconds: 900))
+    }
+
+    /// Replace the coordinates with yours (default: Ho Chi Minh City).
+    private static var airQuality: Item {
+        var i = Item(name: "Air Quality (US AQI)",
+                     source: .script(command: #"curl -s --max-time 8 "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=10.82&longitude=106.63&current=us_aqi" | sed -n 's/.*"us_aqi":\([0-9]*\).*/AQI \1/p'"#,
+                                     refreshSeconds: 1800))
+        i.dots = [dot(ranges: [(nil, 50, green), (50, 100, "#FFD60A"), (100, 150, orange), (150, nil, red)])]
+        return i
+    }
+
+    private static var worldClock: Item {
+        Item(name: "World Clock (New York)",
+             source: .script(command: #"TZ="America/New_York" date +"NY %H:%M""#, refreshSeconds: 30))
+    }
+
+    /// Days left until a date. Edit the date.
+    private static var countdown: Item {
+        var i = Item(name: "Countdown",
+                     source: .script(command: #"d=$(date -j -f "%Y-%m-%d" "2026-12-25" +%s); echo "$(( (d - $(date +%s)) / 86400 ))d""#,
+                                     refreshSeconds: 3600))
+        i.dots = [dot(ranges: [(nil, 7, red), (7, 30, orange), (30, nil, green)])]
+        return i
     }
 
     // MARK: - Helpers
