@@ -112,6 +112,12 @@ curl -s --max-time 8 https://api.coinbase.com/v2/prices/BTC-USD/spot | sed -E 's
 ```
 Swap `BTC-USD` for `ETH-USD`, `SOL-USD`, … for other pairs.
 
+### BTC 3 digits — every 60s
+Only the first three digits of the price (`80574` → `805`). Compact, no `jq`.
+```sh
+curl -s --max-time 8 https://api.coinbase.com/v2/prices/BTC-USD/spot | sed -E 's/.*"amount":"([0-9]+)[."].*/\1/' | cut -c1-3
+```
+
 ### Disk Free % — every 300s
 Free space on `/` as a percentage. Dots: red < 10, orange 10–25, green > 25.
 ```sh

@@ -7,7 +7,7 @@ enum Recipes {
     /// Fresh UUIDs on every call, so a recipe can be added more than once.
     static func all() -> [Item] {
         [cpuLoad, memoryUsed, battery, publicIP, localIP, wifiSSID,
-         btcPrice, diskFree, uptime, gitBranch, ping, clock,
+         btcPrice, btc3Digits, diskFree, uptime, gitBranch, ping, clock,
          pingStream, logTail]
     }
 
@@ -56,6 +56,14 @@ enum Recipes {
         // No jq on a stock macOS: pull "amount":"12345.67" out with sed alone.
         let cmd = #"curl -s --max-time 8 https://api.coinbase.com/v2/prices/BTC-USD/spot | sed -E 's/.*"amount":"([0-9]+)[."].*/$\1/'"#
         return Item(name: "BTC/USD", source: .script(command: cmd, refreshSeconds: 60))
+    }
+
+    private static var btc3Digits: Item {
+        // Leading 3 digits only (e.g. 80574 -> "805"): compact, still tells you where BTC is.
+        let cmd = #"curl -s --max-time 8 https://api.coinbase.com/v2/prices/BTC-USD/spot | sed -E 's/.*"amount":"([0-9]+)[."].*/\1/' | cut -c1-3"#
+        var i = Item(name: "BTC 3 digits", source: .script(command: cmd, refreshSeconds: 60))
+        i.font.monospacedDigits = true
+        return i
     }
 
     private static var diskFree: Item {
