@@ -12,10 +12,41 @@ struct Item: Identifiable, Codable, Hashable {
     var dots: [Dot] = []
     var dotsPosition: DotsPosition = .trailing
     var action: ClickAction = .menu
+    /// SF Symbol drawn before the text. Overridden by a `"symbol"` key in JSON output.
+    var symbol: String? = nil
+    /// Max width of the status item text in points. 0 = unlimited.
+    var maxWidth: Double = 0
 
     var refreshSeconds: Int {
         if case .script(_, let s) = source { return s }
         return 0
+    }
+
+    init(id: UUID = UUID(), name: String = "New Item", enabled: Bool = true,
+         source: Source = .static(text: "Hello"), font: FontSpec = FontSpec(),
+         textColor: ColorSpec = .fixed(nil), dots: [Dot] = [],
+         dotsPosition: DotsPosition = .trailing, action: ClickAction = .menu,
+         symbol: String? = nil, maxWidth: Double = 0) {
+        self.id = id; self.name = name; self.enabled = enabled; self.source = source
+        self.font = font; self.textColor = textColor; self.dots = dots
+        self.dotsPosition = dotsPosition; self.action = action
+        self.symbol = symbol; self.maxWidth = maxWidth
+    }
+
+    /// Everything is optional with a default so older items.json files keep loading.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "New Item"
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        source = try c.decodeIfPresent(Source.self, forKey: .source) ?? .static(text: "")
+        font = try c.decodeIfPresent(FontSpec.self, forKey: .font) ?? FontSpec()
+        textColor = try c.decodeIfPresent(ColorSpec.self, forKey: .textColor) ?? .fixed(nil)
+        dots = try c.decodeIfPresent([Dot].self, forKey: .dots) ?? []
+        dotsPosition = try c.decodeIfPresent(DotsPosition.self, forKey: .dotsPosition) ?? .trailing
+        action = try c.decodeIfPresent(ClickAction.self, forKey: .action) ?? .menu
+        symbol = try c.decodeIfPresent(String.self, forKey: .symbol)
+        maxWidth = try c.decodeIfPresent(Double.self, forKey: .maxWidth) ?? 0
     }
 }
 
@@ -125,26 +156,82 @@ struct FontSpec: Codable, Hashable {
 
 struct ScriptOutput: Equatable {
     var raw: String = ""
+    /// Bar text, ANSI-stripped so rules and number parsing keep working.
     var text: String = ""
+    /// Coloured runs for `text` (single plain run when the output has no ANSI codes).
+    var textRuns: [ANSIRun] = []
+    /// Extra output lines shown at the top of the menu. "----" / "---" means a separator.
+    var menuLines: [String] = []
     var overrideColor: HexColor? = nil
     var overrideDots: [HexColor]? = nil
+    /// SF Symbol name from JSON `"symbol"`.
+    var symbol: String? = nil
+    /// JSON `"refresh"`: refresh interval in seconds for this item until an output without it.
+    var refreshOverride: Int? = nil
+    /// JSON `"action"`: overrides the item's left-click action.
+    var actionOverride: ClickAction? = nil
     var failed: Bool = false
     var errorMessage: String? = nil
     var updatedAt: Date? = nil
 
-    /// Parse plain text or JSON `{"text":..,"color":..,"dots":[..]}`.
+    static let separatorToken = "----"
+
+    static func isSeparator(_ line: String) -> Bool {
+        let t = line.trimmingCharacters(in: .whitespaces)
+        return t == "----" || t == "---"
+    }
+
+    /// Parse script output.
+    ///
+    /// Plain text: first non-empty line is the bar text, the rest become `menuLines`.
+    /// JSON object: `{"text":..,"color":..,"dots":[..],"menu":[..],"symbol":..,"refresh":..,"action":..}`.
     static func parse(_ raw: String, failed: Bool = false, error: String? = nil) -> ScriptOutput {
-        var out = ScriptOutput(raw: raw, text: raw.trimmingCharacters(in: .whitespacesAndNewlines),
-                               failed: failed, errorMessage: error, updatedAt: Date())
-        let trimmed = out.text
+        var out = ScriptOutput(raw: raw, failed: failed, errorMessage: error, updatedAt: Date())
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+
         if trimmed.hasPrefix("{"), let data = trimmed.data(using: .utf8),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             if let t = obj["text"] as? String { out.text = t }
             else if let t = obj["text"] as? NSNumber { out.text = t.stringValue }
             if let c = obj["color"] as? String { out.overrideColor = c }
             if let d = obj["dots"] as? [String] { out.overrideDots = d }
+            if let m = obj["menu"] as? [String] { out.menuLines = m }
+            if let sym = obj["symbol"] as? String, !sym.isEmpty { out.symbol = sym }
+            if let r = obj["refresh"] as? NSNumber, r.intValue > 0 { out.refreshOverride = r.intValue }
+            else if let r = obj["refresh"] as? String, let v = Int(r), v > 0 { out.refreshOverride = v }
+            out.actionOverride = parseAction(obj["action"])
+        } else {
+            var lines = raw.components(separatedBy: .newlines)
+            if let idx = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) {
+                out.text = lines[idx].trimmingCharacters(in: .whitespaces)
+                lines.removeFirst(idx + 1)
+            } else {
+                out.text = ""
+                lines = []
+            }
+            // Drop trailing blank lines, keep the inner ones (they may be deliberate spacers).
+            while let last = lines.last, last.trimmingCharacters(in: .whitespaces).isEmpty { lines.removeLast() }
+            out.menuLines = lines
         }
+
+        out.textRuns = ANSIParser.parse(out.text)
+        out.text = out.textRuns.map(\.text).joined()
         return out
+    }
+
+    private static func parseAction(_ any: Any?) -> ClickAction? {
+        if let s = any as? String {
+            switch s.lowercased() {
+            case "copy": return .copy
+            case "menu": return .menu
+            default: return nil
+            }
+        }
+        if let d = any as? [String: Any] {
+            if let u = d["url"] as? String, !u.isEmpty { return .openURL(url: u) }
+            if let c = d["script"] as? String, !c.isEmpty { return .script(command: c) }
+        }
+        return nil
     }
 
     /// First number found in text.

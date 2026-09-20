@@ -32,13 +32,21 @@ struct ItemEditorView: View {
                                   format: .number).frame(width: 80)
                         Text("seconds (0 = manual)").foregroundStyle(.secondary)
                     }
-                    Text("Tip: output JSON `{\"text\":\"…\",\"color\":\"#hex\",\"dots\":[\"#hex\",…]}` to control colors from the script.")
+                    Text("Tip: extra output lines become menu items (a line of `----` is a separator). ANSI colors (`\\e[31m`, `\\e[1;32m`, `\\e[38;5;N m`) are rendered.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text("Or output JSON: `{\"text\":\"…\",\"color\":\"#hex\",\"dots\":[\"#hex\",…],\"menu\":[\"line\",\"----\",\"line\"],\"symbol\":\"bolt.fill\",\"refresh\":30,\"action\":\"copy\" | {\"url\":\"…\"} | {\"script\":\"…\"}}`")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
 
             Section("Text style") {
                 FontPicker(spec: $item.font)
+                TextField("SF Symbol", text: Binding(get: { item.symbol ?? "" }, set: { item.symbol = $0.isEmpty ? nil : $0 }),
+                          prompt: Text("e.g. bolt.fill (empty = none)"))
+                HStack {
+                    TextField("Max width", value: $item.maxWidth, format: .number).frame(width: 80)
+                    Text("points (0 = unlimited)").foregroundStyle(.secondary)
+                }
                 ColorSpecEditor(title: "Text color", spec: $item.textColor, allowSystem: true)
             }
 
