@@ -244,9 +244,9 @@ enum Recipes {
                              refreshSeconds: 300))
     }
 
-    /// Bar: 1 USD in VND. Menu: major USD pairs (EUR/USD, GBP/USD, AUD/USD, USD/JPY, USD/CNY, USD/SGD, USD/CAD), then each in VND.
+    /// Bar: 1 USD in VND. Menu: one submenu per base currency (USD EUR GBP AUD CNY JPY SGD CAD VND) with all 8 cross rates → 72 pairs.
     private static var exchangeRates: Item {
-        let cmd = #"curl -s --max-time 8 "https://open.er-api.com/v6/latest/USD" | tr ',' '\n' | sed -nE 's/.*"(VND|EUR|CNY|JPY|SGD|GBP|CAD|AUD)":([0-9.]+).*/\1 \2/p' | awk '{r[$1]=$2} END{ if (r["VND"]==0) {print "—"; exit} printf "$ %\047.0f ₫\n", r["VND"]; printf "EUR/USD  %.4f\nGBP/USD  %.4f\nAUD/USD  %.4f\nUSD/JPY  %.2f\nUSD/CNY  %.4f\nUSD/SGD  %.4f\nUSD/CAD  %.4f\n----\n", 1/r["EUR"], 1/r["GBP"], 1/r["AUD"], r["JPY"], r["CNY"], r["SGD"], r["CAD"]; split("EUR GBP AUD JPY CNY SGD CAD",c," "); for(i=1;i<=7;i++){k=c[i]; printf "%s  %\047.0f ₫\n", k, r["VND"]/r[k]} }'"#
+        let cmd = #"curl -s --max-time 8 "https://open.er-api.com/v6/latest/USD" | tr ',' '\n' | sed -nE 's/.*"(USD|VND|EUR|CNY|JPY|SGD|GBP|CAD|AUD)":([0-9.]+).*/\1 \2/p' | awk 'function f(v){ if (v>=1000) return sprintf("%\047.0f",v); if (v>=10) return sprintf("%.2f",v); if (v>=0.01) return sprintf("%.4f",v); return sprintf("%.6f",v) } {r[$1]=$2} END{ if (r["VND"]==0||r["USD"]==0) {print "—"; exit} n=split("USD EUR GBP AUD CNY JPY SGD CAD VND",c," "); printf "$ %s ₫\n", f(r["VND"]); for(i=1;i<=n;i++){ b=c[i]; printf "%s →\n", b; for(j=1;j<=n;j++){ q=c[j]; if (q==b) continue; printf "--%s/%s  %s\n", b, q, f(r[q]/r[b]) } } }'"#
         var i = Item(name: "Exchange Rates", source: .script(command: cmd, refreshSeconds: 3600))
         i.font.monospacedDigits = true
         return i
