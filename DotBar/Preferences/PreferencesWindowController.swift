@@ -38,8 +38,10 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
 
 /// Preview of the real menu bar view, reused inside Preferences.
 struct DotBarPreview: NSViewRepresentable {
-    @ObservedObject var state: AppState
+    let state: AppState
+    @ObservedObject var live: AppState.LiveOutputs
     let item: Item
+    init(state: AppState, item: Item) { self.state = state; self.live = state.live; self.item = item }
 
     func makeNSView(context: Context) -> DotBarView { DotBarView() }
     func updateNSView(_ v: DotBarView, context: Context) {

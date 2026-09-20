@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ItemEditorView: View {
-    @ObservedObject var state: AppState
+    let state: AppState          // not observed: the editor edits `item`; live output is shown by PreviewBox only
     @Binding var item: Item
 
     var body: some View {
@@ -142,7 +142,17 @@ struct ItemEditorView: View {
         .formStyle(.grouped)
     }
 
-    private var previewBox: some View {
+    private var previewBox: some View { PreviewBox(state: state, item: item) }
+}
+
+/// The only part of the editor that re-renders on script output.
+private struct PreviewBox: View {
+    let state: AppState
+    @ObservedObject var live: AppState.LiveOutputs
+    let item: Item
+    init(state: AppState, item: Item) { self.state = state; self.live = state.live; self.item = item }
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Preview").font(.caption).foregroundStyle(.secondary)
             DotBarPreview(state: state, item: item)
@@ -154,6 +164,9 @@ struct ItemEditorView: View {
             }
         }
     }
+}
+
+extension ItemEditorView {
 
     /// Command text field + the "…" file picker, shared by scripts and streams.
     private func commandField(_ cmd: String, set: @escaping (String) -> Void) -> some View {
@@ -262,11 +275,10 @@ struct ClickActionPicker: View {
 
 struct FontPicker: View {
     @Binding var spec: FontSpec
-    private let families = ["System"] + NSFontManager.shared.availableFontFamilies.sorted()
-
     var body: some View {
-        Picker("Font", selection: Binding(get: { spec.family ?? "System" }, set: { spec.family = $0 == "System" ? nil : $0 })) {
-            ForEach(families, id: \.self) { Text($0).tag($0) }
+        LabeledContent("Font") {
+            FontFamilyPopUp(family: Binding(get: { spec.family ?? "System" }, set: { spec.family = $0 == "System" ? nil : $0 }))
+                .frame(width: 220)
         }
         Picker("Weight", selection: $spec.weight) {
             ForEach(FontSpec.Weight.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
@@ -565,5 +577,30 @@ private struct KeyCaptureView: NSViewRepresentable {
         }
 
         private func finish() { window?.makeFirstResponder(nil) }
+    }
+}
+
+/// NSPopUpButton with all font families: one AppKit control instead of ~300 SwiftUI rows.
+struct FontFamilyPopUp: NSViewRepresentable {
+    @Binding var family: String
+    private static let families = ["System"] + NSFontManager.shared.availableFontFamilies.sorted()
+
+    func makeNSView(context: Context) -> NSPopUpButton {
+        let b = NSPopUpButton(frame: .zero, pullsDown: false)
+        b.addItems(withTitles: Self.families)
+        b.target = context.coordinator
+        b.action = #selector(Coordinator.changed(_:))
+        b.controlSize = .regular
+        return b
+    }
+    func updateNSView(_ b: NSPopUpButton, context: Context) {
+        context.coordinator.parent = self
+        if b.titleOfSelectedItem != family { b.selectItem(withTitle: family) }
+    }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    final class Coordinator: NSObject {
+        var parent: FontFamilyPopUp
+        init(_ p: FontFamilyPopUp) { parent = p }
+        @objc func changed(_ sender: NSPopUpButton) { parent.family = sender.titleOfSelectedItem ?? "System" }
     }
 }

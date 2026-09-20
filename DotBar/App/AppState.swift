@@ -5,8 +5,12 @@ final class AppState: ObservableObject {
     static let shared = AppState()
 
     @Published var items: [Item] = [] { didSet { persistAndSync() } }
-    @Published private(set) var outputs: [UUID: ScriptOutput] = [:]
-    @Published private(set) var dotOutputs: [UUID: ScriptOutput] = [:]
+    /// Script results. Kept OFF AppState's publisher so the Preferences form does not re-render
+    /// on every script tick; only views that show live output observe `live`.
+    private(set) var outputs: [UUID: ScriptOutput] = [:] { didSet { live.objectWillChange.send() } }
+    private(set) var dotOutputs: [UUID: ScriptOutput] = [:] { didSet { live.objectWillChange.send() } }
+    let live = LiveOutputs()
+    final class LiveOutputs: ObservableObject {}
 
     private var timers: [UUID: Timer] = [:]
     /// Per-item refresh interval coming from JSON `"refresh"`, until an output without it.
