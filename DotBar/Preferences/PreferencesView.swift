@@ -4,6 +4,8 @@ struct PreferencesView: View {
     @ObservedObject var state: AppState
     @ObservedObject var selection: PreferencesWindowController.SelectionModel
     @State private var showGlobalHotkey = false
+    /// Names only; a fresh Item (new UUIDs) is built at insertion time.
+    private let recipeNames = Recipes.all().map(\.name)
 
     var body: some View {
         NavigationSplitView {
@@ -31,8 +33,8 @@ struct PreferencesView: View {
                         if let id = selection.itemID { state.removeItem(id); selection.itemID = state.items.first?.id }
                     } label: { Image(systemName: "minus") }.disabled(selection.itemID == nil)
                     Menu {
-                        ForEach(Recipes.all()) { recipe in
-                            Button(recipe.name) { state.items.append(recipe); selection.itemID = recipe.id }
+                        ForEach(recipeNames, id: \.self) { name in
+                            Button(name) { addRecipe(named: name) }
                         }
                     } label: { Image(systemName: "sparkles") }
                     .menuStyle(.borderlessButton).frame(width: 40)
@@ -77,6 +79,15 @@ struct PreferencesView: View {
             }
         }
         .onAppear { if selection.itemID == nil { selection.itemID = state.items.first?.id } }
+    }
+
+    private func addRecipe(named name: String) {
+        guard let recipe = Recipes.all().first(where: { $0.name == name }) else { return }
+        // Menu actions fire while the menu is closing; defer so the mutation lands in a fresh update cycle.
+        DispatchQueue.main.async {
+            state.items.append(recipe)
+            selection.itemID = recipe.id
+        }
     }
 
     private func subtitle(_ item: Item) -> String {

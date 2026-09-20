@@ -310,7 +310,7 @@ struct DotsEditor: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             } label: {
                 HStack {
-                    Circle().fill(Color(nsColor: RuleEngine.color(for: dot.color, output: nil) ?? .gray)).frame(width: 8, height: 8)
+                    Circle().fill(Color(nsColor: swatchColor(dot.color))).frame(width: 8, height: 8)
                     Text("Dot \((dots.firstIndex(where: { $0.id == dot.id }) ?? 0) + 1)").fixedSize()
                     Spacer()
                     Button(role: .destructive) { dots.removeAll { $0.id == dot.id } } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
@@ -323,6 +323,12 @@ struct DotsEditor: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+}
+
+/// Editor swatch: for gradients show the end color so the dot is visible before any data arrives.
+private func swatchColor(_ spec: ColorSpec) -> NSColor {
+    if case .gradient(_, _, _, let to) = spec { return NSColor(hex: to) ?? .gray }
+    return RuleEngine.color(for: spec, output: nil) ?? .gray
 }
 
 extension DotSource { var isScript: Bool { if case .script = self { return true } else { return false } } }
