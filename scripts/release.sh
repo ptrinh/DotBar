@@ -55,6 +55,7 @@ gh release create "v$VERSION" "$ZIP" --repo "$REPO" --title "DotBar $VERSION" --
 
 echo "==> Homebrew cask"
 [[ -d "$TAP_DIR/.git" ]] || git clone -q "https://github.com/ptrinh/homebrew-tap.git" "$TAP_DIR"
+( cd "$TAP_DIR" && git pull -q --rebase )
 cat > "$TAP_DIR/Casks/dotbar.rb" <<CASK
 cask "dotbar" do
   version "$VERSION"
@@ -75,5 +76,5 @@ cask "dotbar" do
   ]
 end
 CASK
-( cd "$TAP_DIR" && git pull -q --rebase && git add Casks/dotbar.rb && git commit -qm "dotbar $VERSION" && git push -q )
+( cd "$TAP_DIR" && git add Casks/dotbar.rb && git commit -qm "dotbar $VERSION" && git push -q )
 echo "==> Done. Install: brew install --cask ptrinh/tap/dotbar"
