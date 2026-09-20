@@ -63,8 +63,8 @@ enum Store {
         try decoder.decode([Item].self, from: Data(contentsOf: url))
     }
 
-    static var encoder: JSONEncoder { let e = JSONEncoder(); e.outputFormatting = [.prettyPrinted, .sortedKeys]; return e }
-    static var decoder: JSONDecoder { JSONDecoder() }
+    static let encoder: JSONEncoder = { let e = JSONEncoder(); e.outputFormatting = [.prettyPrinted, .sortedKeys]; return e }()
+    static let decoder = JSONDecoder()
 
     static func defaults() -> [Item] {
         var cpu = Item(name: "CPU Load",

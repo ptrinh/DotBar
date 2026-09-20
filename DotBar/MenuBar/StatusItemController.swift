@@ -117,6 +117,10 @@ final class StatusItemController: NSObject {
 
     // MARK: Menu
 
+    private static let updatedFormatter: DateFormatter = {
+        let df = DateFormatter(); df.dateStyle = .short; df.timeStyle = .medium; return df
+    }()
+
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -127,7 +131,7 @@ final class StatusItemController: NSObject {
                 appendLines(out.menuLines, to: menu)
                 menu.addItem(.separator())
             }
-            let df = DateFormatter(); df.dateStyle = .short; df.timeStyle = .medium
+            let df = Self.updatedFormatter
             menu.addItem(withTitle: "Updated: \(out.updatedAt.map(df.string(from:)) ?? "—")", action: nil, keyEquivalent: "").isEnabled = false
             if out.failed, let err = out.errorMessage {
                 menu.addItem(withTitle: "Error: \(err.prefix(120))", action: nil, keyEquivalent: "").isEnabled = false
