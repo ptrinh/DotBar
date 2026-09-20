@@ -6,16 +6,36 @@ final class DotBarView: NSView {
     private(set) var dots: [NSColor] = []
     private(set) var dotsLeading = false
     private var maxTextWidth: CGFloat = 0
+    private var mode: DisplayMode = .textAndDots
+    private var dotStyle: DotStyle = .circle
+    private var dotSize: CGFloat = DotBarView.dotSize
+    private var badge: String = ""
+    private var badgeColor: NSColor = .systemRed
 
     static let dotSize: CGFloat = 6, dotGap: CGFloat = 2, hGap: CGFloat = 4
+    static let barDotWidth: CGFloat = 3, badgeFontSize: CGFloat = 8.5
 
     func configure(item: Item, output: ScriptOutput?, dotColors: [NSColor]) {
-        text = Self.attributed(item: item, output: output)
-        dots = dotColors
+        mode = output?.displayModeOverride ?? item.displayMode
+        text = Self.attributed(item: item, output: output, mode: mode)
+        dots = mode.showsDots ? dotColors : []
         dotsLeading = item.dotsPosition == .leading
         maxTextWidth = item.maxWidth > 0 ? CGFloat(item.maxWidth) : 0
+        dotStyle = item.dotStyle
+        dotSize = CGFloat(min(max(item.dotSize, 3), 20))
+        badge = String((output?.badge ?? "").prefix(3))
+        badgeColor = (output?.badgeColor.flatMap { NSColor(hex: $0) }) ?? .systemRed
         invalidateIntrinsicContentSize()
         needsDisplay = true
+    }
+
+    /// Width of the dot column for the current style.
+    private var dotColumnWidth: CGFloat { dotStyle == .bar ? Self.barDotWidth : dotSize }
+
+    private var badgeSize: NSSize {
+        guard !badge.isEmpty else { return .zero }
+        let s = Self.badgeString(badge).size()
+        return NSSize(width: max(ceil(s.width) + 5, dotSize + 3), height: ceil(s.height) + 2)
     }
 
     /// Text width after the per-item max-width cap.
@@ -26,7 +46,9 @@ final class DotBarView: NSView {
 
     override var intrinsicContentSize: NSSize {
         var w = textWidth
-        if !dots.isEmpty { w += Self.dotSize + (w > 0 ? Self.hGap : 0) }
+        if !dots.isEmpty { w += dotColumnWidth + (w > 0 ? Self.hGap : 0) }
+        w += badgeSize.width > 0 ? badgeSize.width * 0.6 : 0
+        if mode == .dotsOnly { w = max(w, dotSize + 4) }
         return NSSize(width: w, height: NSStatusBar.system.thickness)
     }
 
@@ -34,35 +56,69 @@ final class DotBarView: NSView {
         let b = bounds
         let ts = text.size()
         let tw = textWidth
-        let dotsW: CGFloat = dots.isEmpty ? 0 : Self.dotSize
+        let dotsW: CGFloat = dots.isEmpty ? 0 : dotColumnWidth
         var x: CGFloat = 0
-        if dotsLeading && !dots.isEmpty { drawDots(atX: x, in: b); x += dotsW + Self.hGap }
+        if dotsLeading && !dots.isEmpty { drawDots(atX: x, in: b); x += dotsW + (tw > 0 ? Self.hGap : 0) }
         if maxTextWidth > 0 {
             // Bounded rect + .byTruncatingTail paragraph style -> tail ellipsis.
             let h = ceil(ts.height)
             text.draw(with: NSRect(x: x, y: (b.height - h) / 2, width: tw, height: h),
                       options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
-        } else {
+        } else if tw > 0 {
             text.draw(at: NSPoint(x: x, y: (b.height - ts.height) / 2))
         }
         x += tw
         if !dotsLeading && !dots.isEmpty { drawDots(atX: x + (tw > 0 ? Self.hGap : 0), in: b) }
+        drawBadge(in: b)
     }
 
     private func drawDots(atX x: CGFloat, in b: NSRect) {
         let n = CGFloat(dots.count)
-        let total = n * Self.dotSize + (n - 1) * Self.dotGap
-        var y = (b.height - total) / 2 + total - Self.dotSize   // top dot first
+        let h = dotSize                                          // bar = same height, 3pt wide
+        let w = dotColumnWidth
+        let total = n * h + (n - 1) * Self.dotGap
+        var y = round((b.height - total) / 2) + total - h        // top dot first
+        let ix = round(x)
         for c in dots {
             c.setFill()
-            NSBezierPath(ovalIn: NSRect(x: x, y: y, width: Self.dotSize, height: Self.dotSize)).fill()
-            y -= Self.dotSize + Self.dotGap
+            let r = NSRect(x: ix, y: round(y), width: w, height: h)
+            switch dotStyle {
+            case .circle: NSBezierPath(ovalIn: r).fill()
+            case .square: NSBezierPath(roundedRect: r, xRadius: 1.5, yRadius: 1.5).fill()
+            case .bar:    NSBezierPath(roundedRect: r, xRadius: 1, yRadius: 1).fill()
+            }
+            y -= h + Self.dotGap
         }
+    }
+
+    // MARK: Badge
+
+    private static func badgeString(_ s: String) -> NSAttributedString {
+        NSAttributedString(string: s, attributes: [
+            .font: NSFont.systemFont(ofSize: badgeFontSize, weight: .bold),
+            .foregroundColor: NSColor.white,
+        ])
+    }
+
+    /// Small rounded pill at the top-right of the content. Integer-aligned, no layers.
+    private func drawBadge(in b: NSRect) {
+        guard !badge.isEmpty else { return }
+        let str = Self.badgeString(badge)
+        let size = badgeSize
+        let rect = NSRect(x: round(b.maxX - size.width),
+                          y: round(b.maxY - size.height - 1),
+                          width: round(size.width), height: round(size.height))
+        badgeColor.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2).fill()
+        let ss = str.size()
+        str.draw(at: NSPoint(x: round(rect.midX - ss.width / 2), y: round(rect.midY - ss.height / 2)))
     }
 
     // MARK: Text
 
-    static func attributed(item: Item, output o: ScriptOutput?) -> NSAttributedString {
+    static func attributed(item: Item, output o: ScriptOutput?,
+                           mode: DisplayMode = .textAndDots) -> NSAttributedString {
+        if mode == .dotsOnly { return NSAttributedString() }
         let s: String
         var runs: [ANSIRun]
         if let o {
@@ -82,13 +138,21 @@ final class DotBarView: NSView {
 
         let base = font(item.font)
         let result = NSMutableAttributedString()
+        let symbolName = o?.symbol ?? o?.barParams.sfimage ?? item.symbol
+        if mode == .symbolOnly {
+            // Symbol alone; fall back to the text when there is no usable symbol.
+            if let name = symbolName, !name.isEmpty,
+               let attachment = symbolAttachment(name, color: color, font: base) {
+                return attachment
+            }
+        }
         for run in runs {
             // ANSI colour wins over the rule / JSON colour for that run.
             let f = run.bold ? bolder(base) : base
             result.append(NSAttributedString(string: run.text,
                                              attributes: [.font: f, .foregroundColor: run.color ?? color]))
         }
-        if let name = o?.symbol ?? o?.barParams.sfimage ?? item.symbol, !name.isEmpty,
+        if let name = symbolName, !name.isEmpty,
            let attachment = symbolAttachment(name, color: color, font: base) {
             if result.length > 0 { result.insert(NSAttributedString(string: " "), at: 0) }
             result.insert(attachment, at: 0)

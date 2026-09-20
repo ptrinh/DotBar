@@ -24,7 +24,7 @@ final class StatusItemController: NSObject {
         ])
         button.target = self
         button.action = #selector(clicked(_:))
-        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp, .otherMouseUp])
         update()
     }
 
@@ -46,7 +46,10 @@ final class StatusItemController: NSObject {
 
     @objc private func clicked(_ sender: NSStatusBarButton) {
         guard let item = state.binding(for: itemID) else { return }
-        if NSApp.currentEvent?.type == .rightMouseUp { showMenu(); return }
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp { showMenu(); return }        // right click: always the menu
+        if event?.type == .otherMouseUp { perform(item.middleAction); return }
+        if event?.modifierFlags.contains(.option) == true { perform(item.altAction); return }
         let out = state.output(for: item)
         // JSON `"action"` wins, then inline `href=` / `bash=` on the bar line, then the configured action.
         if let override = out?.actionOverride { perform(override); return }
@@ -136,6 +139,8 @@ final class StatusItemController: NSObject {
         menu.addItem(.separator())
         menu.addItem(mk("Refresh All", #selector(menuRefreshAll), "R"))
         menu.addItem(.separator())
+        menu.addItem(displayMenuItem(for: item))
+        menu.addItem(.separator())
         menu.addItem(mk("Edit \"\(item.name)\"…", #selector(menuEdit), "e"))
         menu.addItem(mk("Preferences…", #selector(menuPrefs), ","))
         menu.addItem(mk(LaunchAtLogin.isEnabled ? "Launch at Login ✓" : "Launch at Login", #selector(menuLogin)))
@@ -217,6 +222,30 @@ final class StatusItemController: NSObject {
     @objc private func lineClicked(_ sender: NSMenuItem) {
         guard let pl = sender.representedObject as? ParsedLine else { return }
         run(pl.params, fallbackCopy: pl.text)
+    }
+
+    /// "Display" submenu: pick the display mode, persisted through `state.update`.
+    private func displayMenuItem(for item: Item) -> NSMenuItem {
+        let parent = NSMenuItem(title: "Display", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        sub.autoenablesItems = false
+        for mode in DisplayMode.allCases {
+            let mi = NSMenuItem(title: mode.label, action: #selector(menuSetDisplayMode(_:)), keyEquivalent: "")
+            mi.target = self
+            mi.representedObject = mode.rawValue
+            mi.state = mode == item.displayMode ? .on : .off
+            sub.addItem(mi)
+        }
+        parent.submenu = sub
+        return parent
+    }
+
+    @objc private func menuSetDisplayMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let mode = DisplayMode(rawValue: raw),
+              var item = state.binding(for: itemID) else { return }
+        item.displayMode = mode
+        state.update(item)
     }
 
     private func mk(_ title: String, _ sel: Selector, _ key: String = "") -> NSMenuItem {

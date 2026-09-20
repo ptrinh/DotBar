@@ -17,6 +17,18 @@ All three keys are optional. `color` and each entry of `dots` is a `#RRGGBB` or 
 string. Anything that is not JSON is treated as plain text, and dot colors then come from the
 rules you set in the editor (range / regex / contains / equals / empty / script failed).
 
+Three more keys control how the item is drawn for that update:
+
+| Key | Effect |
+|---|---|
+| `mode` | `textAndDots` (default), `dotsOnly`, `textOnly` or `symbolOnly` — wins over the item's **Display → Show** setting for this update |
+| `badge` | string or number, max 3 characters — small pill at the top-right of the item. Omit or leave empty for no badge |
+| `badgeColor` | `#RRGGBB` fill for the badge (default: system red) |
+
+```json
+{"text": "Inbox", "symbol": "tray.fill", "mode": "symbolOnly", "badge": 12, "badgeColor": "#FF9F0A"}
+```
+
 For the number-range rules, DotBar parses the **first number** in the output — so `"14%"`,
 `"15.7 ms"` and `"$80574"` all work directly.
 

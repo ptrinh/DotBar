@@ -54,6 +54,20 @@ struct ItemEditorView: View {
                 ColorSpecEditor(title: "Text color", spec: $item.textColor, allowSystem: true)
             }
 
+            Section("Display") {
+                Picker("Show", selection: $item.displayMode) {
+                    ForEach(DisplayMode.allCases) { Text($0.label).tag($0) }
+                }.pickerStyle(.segmented)
+                Picker("Dot style", selection: $item.dotStyle) {
+                    ForEach(DotStyle.allCases) { Text($0.label).tag($0) }
+                }
+                Stepper(value: $item.dotSize, in: 5...9, step: 1) { Text("Dot size \(Int(item.dotSize)) pt") }
+                ClickActionPicker(title: "Left click", action: $item.action)
+                ClickActionPicker(title: "⌥ + click", action: $item.altAction)
+                ClickActionPicker(title: "Middle click", action: $item.middleAction)
+                Text("Right click always shows the menu.").font(.caption).foregroundStyle(.secondary)
+            }
+
             Section {
                 DotsEditor(dots: $item.dots)
                 if !item.dots.isEmpty {
@@ -63,23 +77,6 @@ struct ItemEditorView: View {
                     }
                 }
             } header: { Text("Dots (0–3)") }
-
-            Section("Left click") {
-                Picker("Action", selection: actionKind) {
-                    Text("Show menu").tag(0)
-                    Text("Copy text").tag(1)
-                    Text("Run script").tag(2)
-                    Text("Open URL").tag(3)
-                }
-                switch item.action {
-                case .script(let cmd):
-                    TextField("Command", text: Binding(get: { cmd }, set: { item.action = .script(command: $0) })).font(.system(.body, design: .monospaced))
-                case .openURL(let u):
-                    TextField("URL", text: Binding(get: { u }, set: { item.action = .openURL(url: $0) }))
-                default: EmptyView()
-                }
-                Text("Right click always shows the menu.").font(.caption).foregroundStyle(.secondary)
-            }
 
             Section("Behavior") {
                 Picker("Notify", selection: $item.notify) {
@@ -128,7 +125,7 @@ struct ItemEditorView: View {
             .font(.caption).foregroundStyle(.secondary)
         Text("Any line can end with xbar-style params — `Build ok | color=red href=https://… bash=\"make\" refresh=true sfimage=hammer length=20` — and `--` prefixes nest lines into submenus.")
             .font(.caption).foregroundStyle(.secondary)
-        Text("Or output JSON: `{\"text\":\"…\",\"color\":\"#hex\",\"dots\":[\"#hex\",…],\"menu\":[\"line\",\"----\",\"line\"],\"symbol\":\"bolt.fill\",\"refresh\":30,\"action\":\"copy\" | {\"url\":\"…\"} | {\"script\":\"…\"}}`")
+        Text("Or output JSON: `{\"text\":\"…\",\"color\":\"#hex\",\"dots\":[\"#hex\",…],\"menu\":[\"line\",\"----\",\"line\"],\"symbol\":\"bolt.fill\",\"refresh\":30,\"action\":\"copy\" | {\"url\":\"…\"} | {\"script\":\"…\"},\"mode\":\"dotsOnly\",\"badge\":\"3\",\"badgeColor\":\"#FF9F0A\"}`")
             .font(.caption).foregroundStyle(.secondary)
     }
 
@@ -152,12 +149,42 @@ struct ItemEditorView: View {
             }
         })
     }
+}
 
-    private var actionKind: Binding<Int> {
+// MARK: - Click action
+
+/// Action kind + its argument field. Reused for left click, ⌥ + click and middle click.
+struct ClickActionPicker: View {
+    let title: String
+    @Binding var action: ClickAction
+
+    var body: some View {
+        Picker(title, selection: kind) {
+            Text("Show menu").tag(0)
+            Text("Copy text").tag(1)
+            Text("Run script").tag(2)
+            Text("Open URL").tag(3)
+        }
+        switch action {
+        case .script(let cmd):
+            TextField("Command", text: Binding(get: { cmd }, set: { action = .script(command: $0) }))
+                .font(.system(.body, design: .monospaced))
+        case .openURL(let u):
+            TextField("URL", text: Binding(get: { u }, set: { action = .openURL(url: $0) }))
+        default: EmptyView()
+        }
+    }
+
+    private var kind: Binding<Int> {
         Binding(get: {
-            switch item.action { case .menu: 0; case .copy: 1; case .script: 2; case .openURL: 3 }
+            switch action { case .menu: 0; case .copy: 1; case .script: 2; case .openURL: 3 }
         }, set: { v in
-            switch v { case 1: item.action = .copy; case 2: item.action = .script(command: ""); case 3: item.action = .openURL(url: "https://"); default: item.action = .menu }
+            switch v {
+            case 1: action = .copy
+            case 2: action = .script(command: "")
+            case 3: action = .openURL(url: "https://")
+            default: action = .menu
+            }
         })
     }
 }

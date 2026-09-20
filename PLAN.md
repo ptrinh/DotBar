@@ -18,6 +18,11 @@ Item
   textColor: ColorSpec
   dots: [Dot] (0..3)
   action: .none | .copy | .script(command) | .openURL
+  altAction: ClickAction = .menu      — dùng khi giữ ⌥ lúc click trái (mới)
+  middleAction: ClickAction = .menu   — nút chuột giữa (mới)
+  displayMode: .textAndDots | .dotsOnly | .textOnly | .symbolOnly  (mới)
+  dotStyle: .circle | .square | .bar  (mới)
+  dotSize: Double = 6 (5…9)           (mới)
   notify: .off | .onTextChange | .onDotColorChange | .onAnyChange   (mới)
   hotkey: Hotkey?  — phím tắt global refresh riêng item (mới)
   hideWhenEmpty: Bool = false  — ẩn hẳn status item khi output rỗng (mới)
@@ -36,6 +41,8 @@ Rule
 - Field mới (`notify`, `hotkey`) decode bằng `decodeIfPresent` → items.json cũ vẫn load được.
 - Hotkey "Refresh All" toàn cục lưu ở UserDefaults key `refreshAllHotkey` (JSON của Hotkey).
 - Script có thể trả JSON để override: `{"text":"..","color":"#..","dots":["#..","#.."]}`. Nếu output không phải JSON → coi là plain text.
+- JSON thêm `mode` (`textAndDots`/`dotsOnly`/`textOnly`/`symbolOnly`, thắng `displayMode` của item cho lần update đó),
+  `badge` (string hoặc number, tối đa 3 ký tự, rỗng = không vẽ) và `badgeColor` (`#hex`, mặc định systemRed).
 
 ## 3. Kiến trúc
 ```
@@ -77,6 +84,10 @@ Preferences/
 - JSON override nhận thêm `menu`, `symbol` (SF Symbol vẽ trước text, tint theo màu text), `refresh` (giây, override interval tới khi output sau không còn key), `action` (`"copy"`/`"menu"`/`{"url":…}`/`{"script":…}`) — action trong output thắng action cấu hình.
 - ANSI SGR (`\e[31m`, `\e[1;32m`, `\e[38;5;N m`, `\e[38;2;r;g;b m`, kể cả dạng literal `\e[`/`\033[`/`\x1b[`) → màu/bold từng run; `text` luôn được strip code để rule + parse số không đổi; màu ANSI thắng màu rule ở run đó.
 - `maxWidth` (points, 0 = không giới hạn) cắt text bằng ellipsis đuôi để status item không vượt quá bề ngang đó.
+- Click trái giữ ⌥ → `altAction`; chuột giữa → `middleAction`; chuột phải luôn mở menu.
+- `displayMode`: `dotsOnly` chỉ vẽ cột dot (rộng tối thiểu dotSize + 4), `textOnly` bỏ dot,
+  `symbolOnly` chỉ vẽ SF Symbol (không có symbol thì fallback về text). Menu có submenu **Display** để đổi nhanh.
+- `dotStyle`: `circle` (oval), `square` (bo 1.5pt), `bar` (rộng 3pt, xếp dọc kiểu cột sóng).
 
 ## 6. Runtime
 - **Env vars** cho mọi script: `DOTBAR_ITEM_NAME`, `DOTBAR_ITEM_ID`, `DOTBAR_APPEARANCE` (`dark`/`light`),
