@@ -40,6 +40,8 @@ struct ItemEditorView: View {
                     }
                     Text("Tip: extra output lines become menu items (a line of `----` is a separator). ANSI colors (`\\e[31m`, `\\e[1;32m`, `\\e[38;5;N m`) are rendered.")
                         .font(.caption).foregroundStyle(.secondary)
+                    Text("Any line can end with xbar-style params — `Build ok | color=red href=https://… bash=\"make\" refresh=true sfimage=hammer length=20` — and `--` prefixes nest lines into submenus.")
+                        .font(.caption).foregroundStyle(.secondary)
                     Text("Or output JSON: `{\"text\":\"…\",\"color\":\"#hex\",\"dots\":[\"#hex\",…],\"menu\":[\"line\",\"----\",\"line\"],\"symbol\":\"bolt.fill\",\"refresh\":30,\"action\":\"copy\" | {\"url\":\"…\"} | {\"script\":\"…\"}}`")
                         .font(.caption).foregroundStyle(.secondary)
                 }
