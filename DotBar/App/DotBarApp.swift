@@ -1,5 +1,6 @@
+// AppKit only. The entry point must not pull SwiftUI in: PreferencesWindowController
+// is the single place that touches it, and it builds nothing until Preferences opens.
 import AppKit
-import SwiftUI
 
 @main
 struct DotBarMain {
