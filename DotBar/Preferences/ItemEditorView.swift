@@ -24,26 +24,22 @@ struct ItemEditorView: View {
                 case .static(let text):
                     TextField("Text", text: Binding(get: { text }, set: { item.source = .static(text: $0) }))
                 case .script(let cmd, let secs):
-                    HStack(alignment: .top) {
-                        TextField("Command", text: Binding(get: { cmd }, set: { item.source = .script(command: $0, refreshSeconds: secs) }),
-                                  prompt: Text("e.g. curl -s https://… | jq -r .price"), axis: .vertical)
-                            .lineLimit(2...5).font(.system(.body, design: .monospaced))
-                        Button("…") {
-                            if let c = FilePicker.chooseScriptCommand() { item.source = .script(command: c, refreshSeconds: secs) }
-                        }
-                        .help("Choose a script file")
-                    }
+                    commandField(cmd) { item.source = .script(command: $0, refreshSeconds: secs) }
+                    Toggle("Streaming", isOn: streaming)
                     HStack {
                         TextField("Refresh every", value: Binding(get: { secs }, set: { item.source = .script(command: cmd, refreshSeconds: max(0, $0)) }),
                                   format: .number).frame(width: 80)
                         Text("seconds (0 = manual)").foregroundStyle(.secondary)
                     }
-                    Text("Tip: extra output lines become menu items (a line of `----` is a separator). ANSI colors (`\\e[31m`, `\\e[1;32m`, `\\e[38;5;N m`) are rendered.")
+                    scriptHints
+                case .stream(let cmd):
+                    commandField(cmd) { item.source = .stream(command: $0) }
+                    Toggle("Streaming", isOn: streaming)
+                    Text("Print a `~~~` line to end each update block.")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text("Any line can end with xbar-style params — `Build ok | color=red href=https://… bash=\"make\" refresh=true sfimage=hammer length=20` — and `--` prefixes nest lines into submenus.")
+                    Text("The command runs once and keeps running; DotBar updates the item on every block (or every line, if the script never prints `~~~`). Refresh restarts it.")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text("Or output JSON: `{\"text\":\"…\",\"color\":\"#hex\",\"dots\":[\"#hex\",…],\"menu\":[\"line\",\"----\",\"line\"],\"symbol\":\"bolt.fill\",\"refresh\":30,\"action\":\"copy\" | {\"url\":\"…\"} | {\"script\":\"…\"}}`")
-                        .font(.caption).foregroundStyle(.secondary)
+                    scriptHints
                 }
             }
 
@@ -115,11 +111,43 @@ struct ItemEditorView: View {
         }
     }
 
+    /// Command text field + the "…" file picker, shared by scripts and streams.
+    private func commandField(_ cmd: String, set: @escaping (String) -> Void) -> some View {
+        HStack(alignment: .top) {
+            TextField("Command", text: Binding(get: { cmd }, set: set),
+                      prompt: Text("e.g. curl -s https://… | jq -r .price"), axis: .vertical)
+                .lineLimit(2...5).font(.system(.body, design: .monospaced))
+            Button("…") { if let c = FilePicker.chooseScriptCommand() { set(c) } }
+                .help("Choose a script file")
+        }
+    }
+
+    @ViewBuilder
+    private var scriptHints: some View {
+        Text("Tip: extra output lines become menu items (a line of `----` is a separator). ANSI colors (`\\e[31m`, `\\e[1;32m`, `\\e[38;5;N m`) are rendered.")
+            .font(.caption).foregroundStyle(.secondary)
+        Text("Any line can end with xbar-style params — `Build ok | color=red href=https://… bash=\"make\" refresh=true sfimage=hammer length=20` — and `--` prefixes nest lines into submenus.")
+            .font(.caption).foregroundStyle(.secondary)
+        Text("Or output JSON: `{\"text\":\"…\",\"color\":\"#hex\",\"dots\":[\"#hex\",…],\"menu\":[\"line\",\"----\",\"line\"],\"symbol\":\"bolt.fill\",\"refresh\":30,\"action\":\"copy\" | {\"url\":\"…\"} | {\"script\":\"…\"}}`")
+            .font(.caption).foregroundStyle(.secondary)
+    }
+
     private var sourceKind: Binding<Int> {
         Binding(get: { item.source.isScript ? 1 : 0 }, set: { v in
             switch (v, item.source) {
-            case (0, .script): item.source = .static(text: state.output(for: item)?.text ?? "")
+            case (0, .script), (0, .stream): item.source = .static(text: state.output(for: item)?.text ?? "")
             case (1, .static(let t)): item.source = .script(command: "echo \"\(t)\"", refreshSeconds: 60)
+            default: break
+            }
+        })
+    }
+
+    /// Converts `.script(cmd, s)` ↔ `.stream(cmd)`, keeping the command.
+    private var streaming: Binding<Bool> {
+        Binding(get: { item.source.isStream }, set: { on in
+            switch (on, item.source) {
+            case (true, .script(let cmd, _)): item.source = .stream(command: cmd)
+            case (false, .stream(let cmd)): item.source = .script(command: cmd, refreshSeconds: 60)
             default: break
             }
         })

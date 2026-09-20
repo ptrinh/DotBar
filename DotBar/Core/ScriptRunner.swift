@@ -1,23 +1,6 @@
 import Foundation
 
 enum ScriptRunner {
-    /// PATH resolved once from the user's login shell, so each refresh runs a cheap non-login shell.
-    private static let environment: [String: String] = {
-        var env = ProcessInfo.processInfo.environment
-        env["LANG"] = env["LANG"] ?? "en_US.UTF-8"
-        let fallback = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        p.arguments = ["-lc", "print -rn -- $PATH"]
-        let pipe = Pipe(); p.standardOutput = pipe; p.standardError = FileHandle.nullDevice
-        if (try? p.run()) != nil {
-            let data = pipe.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit()
-            let path = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            env["PATH"] = path.isEmpty ? fallback : path + ":" + fallback
-        } else { env["PATH"] = fallback }
-        return env
-    }()
-
     /// `extra` is merged on top of the base environment (DOTBAR_* variables).
     static func run(_ command: String, timeout: TimeInterval = 15, extra: [String: String] = [:]) async -> ScriptOutput {
         await withCheckedContinuation { cont in
@@ -29,9 +12,7 @@ enum ScriptRunner {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
         p.arguments = ["-c", command]
-        var env = environment
-        for (k, v) in extra { env[k] = v }
-        p.environment = env
+        p.environment = ScriptEnvironment.merged(extra)
         p.standardInput = FileHandle.nullDevice
         let out = Pipe(), err = Pipe()
         p.standardOutput = out; p.standardError = err

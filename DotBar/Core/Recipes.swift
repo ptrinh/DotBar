@@ -7,7 +7,8 @@ enum Recipes {
     /// Fresh UUIDs on every call, so a recipe can be added more than once.
     static func all() -> [Item] {
         [cpuLoad, memoryUsed, battery, publicIP, localIP, wifiSSID,
-         btcPrice, diskFree, uptime, gitBranch, ping, clock]
+         btcPrice, diskFree, uptime, gitBranch, ping, clock,
+         pingStream, logTail]
     }
 
     // MARK: - Recipes
@@ -88,6 +89,22 @@ enum Recipes {
     private static var clock: Item {
         Item(name: "Clock",
              source: .script(command: #"date +"%a %d %H:%M""#, refreshSeconds: 30))
+    }
+
+    // MARK: - Streaming recipes
+
+    /// Streaming: one long-lived `ping`, one update per reply (`~~~` closes each block).
+    private static var pingStream: Item {
+        let cmd = #"ping 1.1.1.1 | while read l; do echo "$l" | sed -nE 's/.*time=([0-9.]+).*/\1 ms/p'; echo '~~~'; done"#
+        var i = Item(name: "Ping stream", source: .stream(command: cmd))
+        i.dots = [dot(ranges: [(nil, 50, green), (50, 150, orange), (150, nil, red)])]
+        return i
+    }
+
+    /// Streaming: last line of a growing log file. Point it at a log you actually have.
+    private static var logTail: Item {
+        let cmd = #"tail -F "$HOME/Library/Logs/example.log" | while read l; do echo "${l:0:40}"; echo '~~~'; done"#
+        return Item(name: "Log tail", source: .stream(command: cmd))
     }
 
     // MARK: - Helpers

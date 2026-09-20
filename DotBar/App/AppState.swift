@@ -35,6 +35,13 @@ final class AppState: ObservableObject {
     private var isStarting = false
     private var appearanceObserver: NSKeyValueObservation?
 
+    /// Long-lived processes of `.stream` items, one per item.
+    private var streams: [UUID: StreamRunner] = [:]
+    /// True between willSleep and didWake: no stream is running.
+    private var streamsPaused = false
+    private var itemsWatcher: FileWatcher?
+    private var scriptsWatcher: FileWatcher?
+
     /// Spacing between the first run of consecutive items at launch.
     private static let staggerStep: TimeInterval = 0.7
     private static let staggerCap: TimeInterval = 5
@@ -48,17 +55,20 @@ final class AppState: ObservableObject {
         suppressPersist = false
         syncControllers()
         syncHotkeys()
+        syncStreams()
         registerRefreshAllHotkey()
         observeWake()
         observePower()
         observeAppearance()
+        startWatchingFiles()
         isStarting = false
         staggeredRefreshAll()
     }
 
     /// Launch-time refresh: item N starts N * 0.7s in (capped at 5s) so we don't fork every script at once.
     private func staggeredRefreshAll() {
-        for (idx, item) in items.enumerated() where item.enabled {
+        // Streams are launched by syncStreams() instead, so they are skipped here.
+        for (idx, item) in items.enumerated() where item.enabled && !item.isStream {
             let delay = staggerDelay(forIndex: idx)
             let id = item.id
             Task { @MainActor [weak self] in
@@ -87,12 +97,17 @@ final class AppState: ObservableObject {
                     for item in self.items where item.enabled { self.scheduleTimer(for: item) }
                     // Give the network / VPN a moment to come back before re-running scripts.
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    self.streamsPaused = false
+                    self.syncStreams()
                     self.refreshAll()
                 }
             }
         }
         nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.pauseTimers() }
+            Task { @MainActor [weak self] in
+                self?.pauseTimers()
+                self?.pauseStreams()
+            }
         }
     }
 
@@ -100,6 +115,15 @@ final class AppState: ObservableObject {
         timersPaused = true
         for (id, t) in timers { t.invalidate(); timers[id] = nil }
     }
+
+    /// Sleep: kill every streaming process. They come back in syncStreams() after wake.
+    private func pauseStreams() {
+        streamsPaused = true
+        for (id, s) in streams { s.stop(); streams[id] = nil }
+    }
+
+    /// Quit: stop the streams so no child process outlives the app (and none restarts).
+    func shutdownStreams() { pauseStreams() }
 
     /// Low Power Mode stretches short intervals; the user can opt out.
     var respectLowPowerMode: Bool {
@@ -183,6 +207,9 @@ final class AppState: ObservableObject {
                     }
                 }
             }
+        case .stream:
+            // "Refresh" on a stream means: start the process over.
+            if let runner = streams[id] { runner.restart() } else { syncStreams() }
         }
         for dot in item.dots {
             if case .script(let command, _) = dot.source {
@@ -341,6 +368,70 @@ final class AppState: ObservableObject {
         Store.save(items)
         syncControllers()
         syncHotkeys()
+        syncStreams()
+    }
+
+    // MARK: Streaming items
+
+    /// One StreamRunner per enabled `.stream` item. Runners whose item disappeared, got
+    /// disabled or had its command edited are stopped (and so never restart themselves).
+    private func syncStreams() {
+        var wanted: [UUID: String] = [:]
+        for item in items where item.enabled {
+            if case .stream(let cmd) = item.source, !cmd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                wanted[item.id] = cmd
+            }
+        }
+        for (id, runner) in streams where runner.command != wanted[id] {
+            runner.stop()
+            streams[id] = nil
+        }
+        guard !streamsPaused else { return }
+        for (id, cmd) in wanted where streams[id] == nil {
+            guard let item = binding(for: id) else { continue }
+            let runner = StreamRunner(command: cmd, env: scriptEnv(for: item)) { [weak self] out in
+                Task { @MainActor [weak self] in self?.setOutput(out, for: id) }
+            }
+            streams[id] = runner
+            runner.start()
+        }
+    }
+
+    // MARK: File watching
+
+    /// Reload items.json when something else edits it, and re-run items that use a script
+    /// from ~/Library/Application Support/DotBar/scripts when that folder changes.
+    private func startWatchingFiles() {
+        Store.ensureScriptsDirectory()
+        // The directory, not the file: an atomic replace swaps the inode out from under us.
+        itemsWatcher = FileWatcher(directory: Store.directory, debounce: 0.3) { [weak self] in
+            Task { @MainActor [weak self] in self?.reloadItemsIfChangedExternally() }
+        }
+        scriptsWatcher = FileWatcher(directory: Store.scriptsDirectory, debounce: 0.5) { [weak self] in
+            Task { @MainActor [weak self] in self?.refreshItemsUsingScriptsFolder() }
+        }
+    }
+
+    private func reloadItemsIfChangedExternally() {
+        guard let loaded = Store.loadIfChangedExternally(), loaded != items else { return }
+        suppressPersist = true          // the file is already the source of truth; don't write it back
+        items = loaded
+        suppressPersist = false
+        syncControllers()
+        syncHotkeys()
+        syncStreams()
+    }
+
+    private func refreshItemsUsingScriptsFolder() {
+        let dir = Store.scriptsDirectory.path
+        let variants = [dir, (dir as NSString).abbreviatingWithTildeInPath,
+                        "$HOME/Library/Application Support/DotBar/scripts",
+                        "${HOME}/Library/Application Support/DotBar/scripts"]
+        for item in items where item.enabled {
+            guard let cmd = item.source.command else { continue }
+            guard variants.contains(where: { cmd.contains($0) }) else { continue }
+            refresh(item)
+        }
     }
 
     private func syncControllers() {

@@ -13,6 +13,7 @@ Tham khảo: TextBar (richie5um). Mục tiêu: app menu bar cho phép tạo nhi�
 Item
   id, name, enabled
   source: .static(text) | .script(command, refreshSeconds, shell="/bin/zsh -lc", timeout=15)
+          | .stream(command)   — process chạy liên tục, mỗi block stdout là 1 update (mới)
   font: family, size, weight
   textColor: ColorSpec
   dots: [Dot] (0..3)
@@ -88,4 +89,14 @@ Preferences/
 - **Power**: pause timer khi `willSleep`, tạo lại khi wake (trước refresh wake). Low Power Mode
   (`respectLowPowerMode`, UserDefaults, mặc định true) → interval < 60s nhân 3, tối thiểu 30s.
 - **Concurrency guard**: không chạy lần mới khi lần trước của cùng item/dot chưa xong.
+- **Streaming** (`Source.stream`, Core/StreamRunner.swift): 1 process sống lâu / item, stdout đọc dần
+  (`readabilityHandler`, buffer + tách theo `\n`). Dòng đúng bằng `~~~` kết thúc 1 block → `ScriptOutput.parse(block)`.
+  Script không bao giờ in `~~~` → mỗi dòng là 1 block. Process tự thoát → restart backoff 2s/4s/…/60s;
+  disable/xoá item, sleep hoặc quit thì không restart. "Refresh" = restart. Env DOTBAR_* dùng chung
+  `ScriptEnvironment`. Child chạy ở process group riêng (`setpgid`) nên terminate giết cả pipeline.
+  Stop hết stream khi `willSleep`, dựng lại sau wake. Stream không có timer (`refreshSeconds` = 0).
+- **File watching** (Core/FileWatcher.swift, DispatchSource trên *thư mục* để sống sót atomic replace):
+  `items.json` đổi từ bên ngoài (hash nội dung + mtime khác lần ghi cuối) → reload vào AppState
+  (debounce 300ms, `suppressPersist` nên không ghi ngược). `~/Library/Application Support/DotBar/scripts/`
+  (tự tạo) đổi → refresh mọi item có command trỏ vào thư mục đó (debounce 500ms).
 - `hideWhenEmpty`: text rỗng (sau trim) và không có dots override → `statusItem.isVisible = false`.

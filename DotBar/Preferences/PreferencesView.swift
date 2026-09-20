@@ -84,6 +84,7 @@ struct PreferencesView: View {
         switch item.source {
         case .static: parts.append("Static")
         case .script(_, let s): parts.append(s > 0 ? "\(s)s" : "Manual")
+        case .stream: parts.append("Stream")
         }
         if !item.dots.isEmpty { parts.append("\(item.dots.count) dot\(item.dots.count > 1 ? "s" : "")") }
         return parts.joined(separator: " · ")

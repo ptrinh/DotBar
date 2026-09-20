@@ -146,6 +146,36 @@ echo "--Danger zone | color=red disabled=true"
 echo "Bar only, never in the menu | dropdown=false"
 ```
 
+### Ping stream — streaming
+Turn on **Streaming** in the Source section: the command runs once and stays running, and every
+`~~~` line closes an update block. Dots: green < 50 ms, orange 50–150 ms, red > 150 ms.
+```sh
+ping 1.1.1.1 | while read l; do echo "$l" | sed -nE 's/.*time=([0-9.]+).*/\1 ms/p'; echo '~~~'; done
+```
+
+### Log tail — streaming
+**Edit the path** to a log file you actually have; `tail -F` keeps following it across rotations.
+```sh
+tail -F "$HOME/Library/Logs/example.log" | while read l; do echo "${l:0:40}"; echo '~~~'; done
+```
+
+---
+
+## Streaming items
+
+A streaming item launches its command **once** and keeps it running, instead of re-running it on a
+timer. Every block of output replaces the item's text, so updates arrive the moment the script
+prints them.
+
+- End each update block with a line that is exactly `~~~`.
+- A script that never prints `~~~` still works: each line is then one update, so
+  `while true; do date; sleep 1; done` ticks once a second.
+- A block is parsed exactly like normal script output — plain text, JSON, xbar params, menu lines.
+- If the process exits on its own, DotBar restarts it with a growing delay (2s, 4s, … up to 60s).
+- **Refresh** (menu or hotkey) restarts the process. Disabling the item, sleep and quitting stop it
+  for good — nothing is left running behind the app.
+- There is no refresh interval for a streaming item, and the sidebar shows **Stream**.
+
 ---
 
 ## Environment
@@ -192,6 +222,17 @@ open "dotbar://prefs"                            # open Preferences
 - In Low Power Mode, intervals under a minute run 3x slower (at least 30s). Turn this off in the gear
   popover in Preferences.
 - A new run never starts while the previous run of the same item (or dot) is still going.
+
+## The scripts folder
+
+Drop scripts in `~/Library/Application Support/DotBar/scripts` and DotBar re-runs items using them
+when they change. The folder is created at launch; any item whose command mentions a path inside it
+is refreshed (streams are restarted) about half a second after you save the file, so editing a
+script is enough to see the new output.
+
+`items.json` in the same folder is watched too: edit it with another editor, or have a script
+rewrite it, and DotBar reloads the items without you restarting the app.
+
 
 ## Using a script file
 

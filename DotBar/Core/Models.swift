@@ -21,10 +21,13 @@ struct Item: Identifiable, Codable, Hashable {
     /// Hide the status item entirely while the output text is empty and no dots are overridden.
     var hideWhenEmpty: Bool = false
 
+    /// 0 for static text and for streams — a stream pushes updates itself, so it has no timer.
     var refreshSeconds: Int {
         if case .script(_, let s) = source { return s }
         return 0
     }
+
+    var isStream: Bool { source.isStream }
 
     init(id: UUID = UUID(), name: String = "New Item", enabled: Bool = true,
          source: Source = .static(text: "Hello"), font: FontSpec = FontSpec(),
@@ -89,8 +92,24 @@ struct Hotkey: Codable, Hashable {
 enum Source: Codable, Hashable {
     case `static`(text: String)
     case script(command: String, refreshSeconds: Int)
+    /// SwiftBar-style "streamable": one long-lived process whose stdout is read block by block.
+    case stream(command: String)
 
-    var isScript: Bool { if case .script = self { return true } else { return false } }
+    /// True for anything that runs a command — the UI treats a stream like a script with no interval.
+    var isScript: Bool {
+        switch self { case .script, .stream: return true; case .static: return false }
+    }
+
+    var isStream: Bool { if case .stream = self { return true } else { return false } }
+
+    /// The command line, for scripts and streams alike.
+    var command: String? {
+        switch self {
+        case .static: return nil
+        case .script(let c, _): return c
+        case .stream(let c): return c
+        }
+    }
 }
 
 enum DotsPosition: String, Codable, CaseIterable {

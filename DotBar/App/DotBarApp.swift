@@ -18,6 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if AppState.shared.items.isEmpty { PreferencesWindowController.shared.show() }
     }
 
+    /// Quitting must not leave a streaming child process behind.
+    func applicationWillTerminate(_ notification: Notification) {
+        AppState.shared.shutdownStreams()
+    }
+
     /// dotbar:// URLs (see URLCommands).
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls { URLCommands.handle(url) }
