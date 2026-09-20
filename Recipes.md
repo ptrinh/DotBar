@@ -112,8 +112,8 @@ curl -s --max-time 8 https://api.coinbase.com/v2/prices/BTC-USD/spot | sed -E 's
 ```
 Swap `BTC-USD` for `ETH-USD`, `SOL-USD`, … for other pairs.
 
-### BTC + CPU/RAM dots
-Text = BTC price. Dot 1 fades from transparent to red with CPU %, dot 2 from transparent to yellow with RAM %. Uses the **Gradient** color mode: pick "Gradient", set the value range (0 → 100) and the two end colors; alpha is interpolated, so a `#RRGGBB00` start fades in.
+### BTC 3 digits + CPU/RAM dots
+Text = first 3 digits of the BTC price. Dot 1 fades from transparent to red with CPU %, dot 2 from transparent to yellow with RAM %. Uses the **Gradient** color mode: pick "Gradient", set the value range (0 → 100) and the two end colors; alpha is interpolated, so a `#RRGGBB00` start fades in.
 ```sh
 # dot 1 (own script, every 10s)
 top -l 1 -n 0 | awk '/CPU usage/ {printf "%.0f", $3+$5}'

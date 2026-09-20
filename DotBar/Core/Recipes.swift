@@ -66,12 +66,12 @@ enum Recipes {
         return i
     }
 
-    /// BTC price as text; dot 1 fades transparent -> red with CPU %, dot 2 transparent -> yellow with RAM %.
+    /// First 3 digits of the BTC price as text; dot 1 fades transparent -> red with CPU %, dot 2 transparent -> yellow with RAM %.
     private static var btcWithLoadDots: Item {
-        let btc = #"curl -s --max-time 8 https://api.coinbase.com/v2/prices/BTC-USD/spot | sed -E 's/.*"amount":"([0-9]+)[."].*/$\1/'"#
+        let btc = #"curl -s --max-time 8 https://api.coinbase.com/v2/prices/BTC-USD/spot | sed -E 's/.*"amount":"([0-9]+)[."].*/\1/' | cut -c1-3"#
         let cpu = #"top -l 1 -n 0 | awk '/CPU usage/ {printf "%.0f", $3+$5}'"#
         let ram = #"vm_stat | awk '/Pages free/{f=$3} /Pages active/{a=$3} /Pages inactive/{i=$3} /Pages speculative/{s=$3} /Pages wired down/{w=$4} /Pages occupied by compressor/{c=$5} END{gsub(/[^0-9]/,"",f);gsub(/[^0-9]/,"",a);gsub(/[^0-9]/,"",i);gsub(/[^0-9]/,"",s);gsub(/[^0-9]/,"",w);gsub(/[^0-9]/,"",c); t=f+a+i+s+w+c; if (t>0) printf "%.0f", (a+w+c)*100/t}'"#
-        var i = Item(name: "BTC + CPU/RAM dots", source: .script(command: btc, refreshSeconds: 60))
+        var i = Item(name: "BTC 3 digits + CPU/RAM dots", source: .script(command: btc, refreshSeconds: 60))
         i.dots = [
             Dot(source: .script(command: cpu, refreshSeconds: 10),
                 color: .gradient(min: 0, max: 100, from: "#FF453A00", to: "#FF453A")),
