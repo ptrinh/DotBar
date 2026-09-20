@@ -2,7 +2,13 @@
 
 Custom text and status dots for the macOS menu bar. Minimal by design: ~600 KB binary, ~14 MB RAM idle, near-zero CPU.
 
-![DotBar concept](https://img.shields.io/badge/macOS-14%2B-black) ![Swift](https://img.shields.io/badge/Swift-5.10-orange) ![No dependencies](https://img.shields.io/badge/dependencies-0-green)
+![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black) ![Swift](https://img.shields.io/badge/Swift-5.10-orange) ![No dependencies](https://img.shields.io/badge/dependencies-0-green)
+
+![DotBar in the menu bar](docs/screenshots/hero.png)
+
+| Preferences | Menu and recipes |
+|---|---|
+| ![Preferences](docs/screenshots/preferences.png) | ![Menu and recipes](docs/screenshots/menu-recipes.png) |
 
 ## What it does
 
