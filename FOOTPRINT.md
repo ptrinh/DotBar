@@ -191,3 +191,7 @@ move. They are allocation-churn and tidiness fixes.
   verified by clicking through a visible window — this environment has neither screen
   recording nor assistive-access permission, so `screencapture` and `System Events`
   both return nothing. A human should still open Preferences once after merging.
+
+
+## Reverted: `-disable-reflection-metadata`
+SwiftUI uses runtime reflection to discover `@ObservedObject`/`@State` properties in views. With the flag, Release builds stopped re-rendering the Preferences window on state changes (sidebar not updating, detail pane empty after selection). Removed in 0.1.8; the ~16 KB is not worth it.

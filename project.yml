@@ -38,8 +38,7 @@ settings:
       # Codable is compile-time synthesized (round-trip + legacy items.json decode both pass)
       # and the whole SwiftUI Preferences tree renders identically with it on.
       # See FOOTPRINT.md "Reflection metadata" before touching this.
-      OTHER_SWIFT_FLAGS: "-Xfrontend -disable-reflection-metadata"
-targets:
+      targets:
   DotBar:
     type: application
     platform: macOS
