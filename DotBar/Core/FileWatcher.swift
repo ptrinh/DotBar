@@ -7,7 +7,7 @@ final class FileWatcher {
     private let url: URL
     private let debounce: TimeInterval
     private let onChange: () -> Void
-    private let queue = DispatchQueue(label: "com.ptrinh.DotBar.watch", qos: .utility)
+    private let queue = DispatchQueue(label: "uk.trinh.DotBar.watch", qos: .utility)
     private var source: DispatchSourceFileSystemObject?
     private var fd: Int32 = -1
     private var pending: DispatchWorkItem?

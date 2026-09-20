@@ -3,13 +3,13 @@
 # Usage: scripts/appstore.sh <version> [upload]
 # Needs .release.env (TEAM_ID, ASC_KEY, ASC_KEY_ID, ASC_ISSUER). Manual signing: "Apple Distribution" cert +
 # the "DotBar Mac App Store" provisioning profile (created via the ASC API), pkg signed with the
-# Mac Installer Distribution cert. The app record for com.ptrinh.DotBar must exist in App Store Connect before `upload`.
+# Mac Installer Distribution cert. The app record for uk.trinh.DotBar must exist in App Store Connect before `upload`.
 set -euo pipefail
 VERSION="${1:?usage: appstore.sh <version> [upload]}"; MODE="${2:-export}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 [[ -f .release.env ]] && source .release.env
 : "${TEAM_ID:?}" "${ASC_KEY:?}" "${ASC_KEY_ID:?}" "${ASC_ISSUER:?}"
-MAS_PROFILE="${MAS_PROFILE:-DotBar Mac App Store}"
+MAS_PROFILE="${MAS_PROFILE:-DotBar Mac App Store uk}"
 INSTALLER_CERT="${INSTALLER_CERT:-3rd Party Mac Developer Installer}"
 OUT="$ROOT/dist/appstore"; ARCHIVE="$OUT/DotBar.xcarchive"
 BUILD_NO=$(git rev-list --count HEAD)
@@ -40,7 +40,7 @@ cat > "$OUT/ExportOptions.plist" <<PLIST
   <key>signingStyle</key><string>manual</string>
   <key>signingCertificate</key><string>Apple Distribution</string>
   <key>installerSigningCertificate</key><string>$INSTALLER_CERT</string>
-  <key>provisioningProfiles</key><dict><key>com.ptrinh.DotBar</key><string>$MAS_PROFILE</string></dict>
+  <key>provisioningProfiles</key><dict><key>uk.trinh.DotBar</key><string>$MAS_PROFILE</string></dict>
   <key>uploadSymbols</key><true/>
 </dict></plist>
 PLIST

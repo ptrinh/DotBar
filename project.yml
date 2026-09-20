@@ -1,6 +1,6 @@
 name: DotBar
 options:
-  bundleIdPrefix: com.ptrinh
+  bundleIdPrefix: uk.trinh
   deploymentTarget:
     macOS: "14.0"
   xcodeVersion: "16.0"
@@ -50,7 +50,7 @@ targets:
       properties:
         CFBundleName: DotBar
         CFBundleDisplayName: DotBar
-        CFBundleIdentifier: com.ptrinh.DotBar
+        CFBundleIdentifier: uk.trinh.DotBar
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
@@ -68,7 +68,7 @@ targets:
             CFBundleURLSchemes: [dotbar]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.ptrinh.DotBar
+        PRODUCT_BUNDLE_IDENTIFIER: uk.trinh.DotBar
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_APP_SANDBOX: NO
         COMBINE_HIDPI_IMAGES: YES

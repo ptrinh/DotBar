@@ -72,7 +72,7 @@ cask "dotbar" do
 
   zap trash: [
     "~/Library/Application Support/DotBar",
-    "~/Library/Preferences/com.ptrinh.DotBar.plist",
+    "~/Library/Preferences/uk.trinh.DotBar.plist",
   ]
 end
 CASK

@@ -1,10 +1,10 @@
 # Mac App Store checklist
 
-Bundle ID `com.ptrinh.DotBar` is registered; provisioning profile "DotBar Mac App Store" is installed.
+Bundle ID `uk.trinh.DotBar` is registered; provisioning profile "DotBar Mac App Store" is installed.
 Build: `scripts/appstore.sh <version> export` (pkg in dist/appstore) or `scripts/appstore.sh <version> upload`.
 
 ## One-time, in App Store Connect (web only, no API)
-1. My Apps → + → New App: platform macOS, name **DotBar**, primary language English, bundle ID com.ptrinh.DotBar, SKU `dotbar-mac`.
+1. My Apps → + → New App: platform macOS, name **DotBar**, primary language English, bundle ID uk.trinh.DotBar, SKU `dotbar-mac`.
 2. Then `scripts/appstore.sh <version> upload` pushes the build.
 
 ## Metadata draft

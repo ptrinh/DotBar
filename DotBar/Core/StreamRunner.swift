@@ -15,7 +15,7 @@ final class StreamRunner {
     private let env: [String: String]
     private let onOutput: (ScriptOutput) -> Void
     /// Serializes all mutable state; the readability handler hops onto it.
-    private let queue = DispatchQueue(label: "com.ptrinh.DotBar.stream", qos: .utility)
+    private let queue = DispatchQueue(label: "uk.trinh.DotBar.stream", qos: .utility)
 
     private var process: Process?
     private var pipe: Pipe?
