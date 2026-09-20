@@ -32,11 +32,7 @@ final class StatusItemController: NSObject {
     func update() {
         guard let item = state.binding(for: itemID) else { return }
         let out = state.output(for: item)
-        var colors: [NSColor] = []
-        for (idx, dot) in item.dots.enumerated() {
-            if let ov = out?.overrideDots, idx < ov.count, let c = NSColor(hex: ov[idx]) { colors.append(c) }
-            else { colors.append(RuleEngine.color(for: dot.color, output: state.output(for: dot, in: item)) ?? .secondaryLabelColor) }
-        }
+        let colors = state.resolvedDotColors(for: item)
         view.configure(item: item, output: out, dotColors: colors)
         statusItem.length = view.intrinsicContentSize.width + 12
     }

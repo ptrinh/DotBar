@@ -12,11 +12,33 @@ struct Item: Identifiable, Codable, Hashable {
     var dots: [Dot] = []
     var dotsPosition: DotsPosition = .trailing
     var action: ClickAction = .menu
+    var notify: NotifySpec = .off
+    var hotkey: Hotkey? = nil
 
     var refreshSeconds: Int {
         if case .script(_, let s) = source { return s }
         return 0
     }
+}
+
+/// When to raise a user notification for an item.
+enum NotifySpec: String, Codable, CaseIterable, Identifiable {
+    case off, onTextChange, onDotColorChange, onAnyChange
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .off: return "Never"
+        case .onTextChange: return "When text changes"
+        case .onDotColorChange: return "When a dot color changes"
+        case .onAnyChange: return "When text or a dot changes"
+        }
+    }
+}
+
+/// Carbon key code + Carbon modifier flags (cmdKey/optionKey/controlKey/shiftKey).
+struct Hotkey: Codable, Hashable {
+    var keyCode: UInt32
+    var modifiers: UInt32
 }
 
 enum Source: Codable, Hashable {
@@ -152,5 +174,30 @@ struct ScriptOutput: Equatable {
         let pattern = #"-?\d+(?:[.,]\d+)?"#
         guard let r = text.range(of: pattern, options: .regularExpression) else { return nil }
         return Double(text[r].replacingOccurrences(of: ",", with: "."))
+    }
+}
+
+// MARK: - Item decoding (backward compatible)
+
+extension Item {
+    enum CodingKeys: String, CodingKey {
+        case id, name, enabled, source, font, textColor, dots, dotsPosition, action, notify, hotkey
+    }
+
+    /// Every field is optional on the way in so older items.json files keep loading.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init()
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? id
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? name
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? enabled
+        source = try c.decodeIfPresent(Source.self, forKey: .source) ?? source
+        font = try c.decodeIfPresent(FontSpec.self, forKey: .font) ?? font
+        textColor = try c.decodeIfPresent(ColorSpec.self, forKey: .textColor) ?? textColor
+        dots = try c.decodeIfPresent([Dot].self, forKey: .dots) ?? dots
+        dotsPosition = try c.decodeIfPresent(DotsPosition.self, forKey: .dotsPosition) ?? dotsPosition
+        action = try c.decodeIfPresent(ClickAction.self, forKey: .action) ?? action
+        notify = try c.decodeIfPresent(NotifySpec.self, forKey: .notify) ?? .off
+        hotkey = try c.decodeIfPresent(Hotkey.self, forKey: .hotkey)
     }
 }

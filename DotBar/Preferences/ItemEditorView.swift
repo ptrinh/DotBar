@@ -68,6 +68,17 @@ struct ItemEditorView: View {
                 }
                 Text("Right click always shows the menu.").font(.caption).foregroundStyle(.secondary)
             }
+
+            Section("Behavior") {
+                Picker("Notify", selection: $item.notify) {
+                    ForEach(NotifySpec.allCases) { Text($0.label).tag($0) }
+                }
+                Text("Notifications start from the second result, so launching the app is quiet.")
+                    .font(.caption).foregroundStyle(.secondary)
+                HotkeyRecorder(label: "Refresh hotkey", hotkey: $item.hotkey)
+                Text("Global shortcut that refreshes this item. At least one modifier is required.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }
@@ -256,5 +267,69 @@ struct RulesEditor: View {
         case .isEmpty, .scriptFailed:
             EmptyView()
         }
+    }
+}
+
+// MARK: - Hotkey recorder
+
+struct HotkeyRecorder: View {
+    var label: String = "Hotkey"
+    @Binding var hotkey: Hotkey?
+    @State private var recording = false
+
+    var body: some View {
+        HStack {
+            Text(label)
+            Spacer()
+            Text(recording ? "Press keys…" : (hotkey?.display ?? "None"))
+                .font(.system(.body, design: .monospaced))
+                .foregroundStyle(recording ? Color.accentColor : (hotkey == nil ? Color.secondary : Color.primary))
+            Button(recording ? "Cancel" : "Record") { recording.toggle() }
+            Button("Clear") { hotkey = nil; recording = false }.disabled(hotkey == nil)
+            KeyCaptureView(recording: $recording) { hotkey = $0; recording = false }
+                .frame(width: 1, height: 1)
+        }
+    }
+}
+
+/// Invisible NSView that grabs the next keyDown while recording.
+private struct KeyCaptureView: NSViewRepresentable {
+    @Binding var recording: Bool
+    var onCapture: (Hotkey) -> Void
+
+    func makeNSView(context: Context) -> Capture { Capture() }
+
+    func updateNSView(_ view: Capture, context: Context) {
+        view.onCapture = onCapture
+        view.onCancel = { recording = false }
+        let wantsFocus = recording
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            if wantsFocus, window.firstResponder !== view { window.makeFirstResponder(view) }
+            else if !wantsFocus, window.firstResponder === view { window.makeFirstResponder(nil) }
+        }
+    }
+
+    final class Capture: NSView {
+        var onCapture: ((Hotkey) -> Void)?
+        var onCancel: (() -> Void)?
+        override var acceptsFirstResponder: Bool { true }
+
+        override func keyDown(with event: NSEvent) {
+            if event.keyCode == 53 { finish(); onCancel?(); return }          // esc cancels
+            let mods = Hotkey.carbonModifiers(from: event.modifierFlags)
+            guard mods != 0 else { NSSound.beep(); return }                    // plain keys ignored
+            onCapture?(Hotkey(keyCode: UInt32(event.keyCode), modifiers: mods))
+            finish()
+        }
+
+        /// Command-based combos arrive here instead of keyDown.
+        override func performKeyEquivalent(with event: NSEvent) -> Bool {
+            guard window?.firstResponder === self else { return false }
+            keyDown(with: event)
+            return true
+        }
+
+        private func finish() { window?.makeFirstResponder(nil) }
     }
 }

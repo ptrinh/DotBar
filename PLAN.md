@@ -17,6 +17,10 @@ Item
   textColor: ColorSpec
   dots: [Dot] (0..3)
   action: .none | .copy | .script(command) | .openURL
+  notify: .off | .onTextChange | .onDotColorChange | .onAnyChange   (mới)
+  hotkey: Hotkey?  — phím tắt global refresh riêng item (mới)
+Hotkey
+  keyCode: UInt32, modifiers: UInt32 (Carbon flags)
 Dot
   id, source: .mainValue | .script(command, refreshSeconds)
   color: ColorSpec
@@ -27,6 +31,8 @@ Rule
   color: hex
 ```
 - Giá trị số cho rule range: parse số đầu tiên trong output (regex `-?\d+(\.\d+)?`).
+- Field mới (`notify`, `hotkey`) decode bằng `decodeIfPresent` → items.json cũ vẫn load được.
+- Hotkey "Refresh All" toàn cục lưu ở UserDefaults key `refreshAllHotkey` (JSON của Hotkey).
 - Script có thể trả JSON để override: `{"text":"..","color":"#..","dots":["#..","#.."]}`. Nếu output không phải JSON → coi là plain text.
 
 ## 3. Kiến trúc
