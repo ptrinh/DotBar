@@ -28,6 +28,17 @@ settings:
       DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
       DEPLOYMENT_POSTPROCESSING: YES
       SWIFT_ENFORCE_EXCLUSIVE_ACCESS: compile-time
+      ENABLE_TESTABILITY: NO
+      SWIFT_ENABLE_LIBRARY_EVOLUTION: NO
+      # Cross-module inlining across the Swift sources on top of -Osize/WMO.
+      SWIFT_LTO: YES
+      # Drop load commands for autolinked dylibs no symbol actually needs.
+      OTHER_LDFLAGS: "-Wl,-dead_strip_dylibs"
+      # Strips __swift5_typeref/__swift5_reflstr/__swift5_fieldmd. Verified safe here:
+      # Codable is compile-time synthesized (round-trip + legacy items.json decode both pass)
+      # and the whole SwiftUI Preferences tree renders identically with it on.
+      # See FOOTPRINT.md "Reflection metadata" before touching this.
+      OTHER_SWIFT_FLAGS: "-Xfrontend -disable-reflection-metadata"
 targets:
   DotBar:
     type: application
@@ -50,6 +61,9 @@ targets:
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSHumanReadableCopyright: "© 2026 Phil Trinh. All rights reserved."
         NSPrincipalClass: NSApplication
+        # Safe: items.json is written atomically on every model change, so there is
+        # nothing to flush at shutdown. Lets the system skip us at logout/restart.
+        NSSupportsSuddenTermination: true
         CFBundleURLTypes:
           - CFBundleURLName: DotBar URL
             CFBundleURLSchemes: [dotbar]

@@ -41,5 +41,7 @@
 	<string>© 2026 Phil Trinh. All rights reserved.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSSupportsSuddenTermination</key>
+	<true/>
 </dict>
 </plist>
