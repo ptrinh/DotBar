@@ -9,6 +9,8 @@ final class AppState: ObservableObject {
     @Published private(set) var dotOutputs: [UUID: ScriptOutput] = [:]
 
     private var timers: [UUID: Timer] = [:]
+    /// Per-item refresh interval coming from JSON `"refresh"`, until an output without it.
+    private var refreshOverrides: [UUID: Int] = [:]
     private var controllers: [UUID: StatusItemController] = [:]
     private var suppressPersist = false
 
@@ -62,6 +64,10 @@ final class AppState: ObservableObject {
     private func setOutput(_ out: ScriptOutput, for id: UUID) {
         outputs[id] = out
         controllers[id]?.update()
+        if refreshOverrides[id] != out.refreshOverride {
+            refreshOverrides[id] = out.refreshOverride
+            if let item = binding(for: id), item.enabled { scheduleTimer(for: item) }
+        }
     }
 
     func output(for item: Item) -> ScriptOutput? { outputs[item.id] }
@@ -84,6 +90,7 @@ final class AppState: ObservableObject {
         let ids = Set(items.map(\.id))
         for (id, c) in controllers where !ids.contains(id) {
             c.remove(); controllers[id] = nil; timers[id]?.invalidate(); timers[id] = nil
+            refreshOverrides[id] = nil
         }
         for item in items {
             if item.enabled {
@@ -98,7 +105,7 @@ final class AppState: ObservableObject {
     }
 
     private func scheduleTimer(for item: Item) {
-        var interval = item.refreshSeconds
+        var interval = refreshOverrides[item.id] ?? item.refreshSeconds
         for d in item.dots { if case .script(_, let s) = d.source, s > 0 { interval = interval == 0 ? s : min(interval, s) } }
         if let t = timers[item.id], Int(t.timeInterval) == interval { return }   // unchanged
         timers[item.id]?.invalidate()

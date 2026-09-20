@@ -48,7 +48,8 @@ final class StatusItemController: NSObject {
     @objc private func clicked(_ sender: NSStatusBarButton) {
         guard let item = state.binding(for: itemID) else { return }
         if NSApp.currentEvent?.type == .rightMouseUp { showMenu(); return }
-        switch item.action {
+        // JSON `"action"` in the latest output wins over the configured action.
+        switch state.output(for: item)?.actionOverride ?? item.action {
         case .menu: showMenu()
         case .copy: copyOutput()
         case .script(let cmd): Task.detached(priority: .utility) { _ = await ScriptRunner.run(cmd) }
@@ -74,14 +75,18 @@ final class StatusItemController: NSObject {
         let menu = NSMenu()
         guard let item = state.binding(for: itemID) else { return menu }
         if let out = state.output(for: item) {
+            // Extra output lines first, TextBar style: click one to copy it.
+            if !out.menuLines.isEmpty {
+                for line in out.menuLines {
+                    if ScriptOutput.isSeparator(line) { menu.addItem(.separator()); continue }
+                    menu.addItem(menuLineItem(line))
+                }
+                menu.addItem(.separator())
+            }
             let df = DateFormatter(); df.dateStyle = .short; df.timeStyle = .medium
             menu.addItem(withTitle: "Updated: \(out.updatedAt.map(df.string(from:)) ?? "—")", action: nil, keyEquivalent: "").isEnabled = false
             if out.failed, let err = out.errorMessage {
                 menu.addItem(withTitle: "Error: \(err.prefix(120))", action: nil, keyEquivalent: "").isEnabled = false
-            }
-            let raw = out.raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !raw.isEmpty, raw.count > out.text.count + 2 {
-                menu.addItem(withTitle: String(raw.prefix(300)), action: nil, keyEquivalent: "").isEnabled = false
             }
             menu.addItem(.separator())
         }
@@ -96,6 +101,34 @@ final class StatusItemController: NSObject {
         menu.addItem(.separator())
         menu.addItem(mk("Quit DotBar", #selector(menuQuit), "q"))
         return menu
+    }
+
+    /// One output line: ANSI colours preserved, plain text copied on click.
+    private func menuLineItem(_ line: String) -> NSMenuItem {
+        let runs = ANSIParser.parse(line)
+        let plain = runs.map(\.text).joined()
+        let m = NSMenuItem(title: plain, action: #selector(copyLine(_:)), keyEquivalent: "")
+        m.target = self
+        m.representedObject = plain
+        if runs.contains(where: { $0.color != nil || $0.bold }) {
+            let base = NSFont.menuFont(ofSize: 0)
+            let bold = NSFontManager.shared.convert(base, toHaveTrait: .boldFontMask)
+            let s = NSMutableAttributedString()
+            for r in runs {
+                s.append(NSAttributedString(string: r.text, attributes: [
+                    .font: r.bold ? bold : base,
+                    .foregroundColor: r.color ?? NSColor.labelColor,
+                ]))
+            }
+            m.attributedTitle = s
+        }
+        return m
+    }
+
+    @objc private func copyLine(_ sender: NSMenuItem) {
+        guard let s = sender.representedObject as? String else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(s, forType: .string)
     }
 
     private func mk(_ title: String, _ sel: Selector, _ key: String = "") -> NSMenuItem {

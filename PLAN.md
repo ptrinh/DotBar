@@ -65,3 +65,7 @@ Preferences/
 - Dot size 6pt, spacing 2pt, xếp dọc bên phải text (có option bên trái).
 - Item bị ẩn nếu output rỗng và không có dot.
 - Script fail/timeout → text giữ giá trị cũ + rule `.scriptFailed` (mặc định đỏ nếu có dot).
+- Output nhiều dòng: dòng non-empty đầu = text trên bar, các dòng sau vào đầu menu (click = copy dòng đó); dòng `----`/`---` = separator.
+- JSON override nhận thêm `menu`, `symbol` (SF Symbol vẽ trước text, tint theo màu text), `refresh` (giây, override interval tới khi output sau không còn key), `action` (`"copy"`/`"menu"`/`{"url":…}`/`{"script":…}`) — action trong output thắng action cấu hình.
+- ANSI SGR (`\e[31m`, `\e[1;32m`, `\e[38;5;N m`, `\e[38;2;r;g;b m`, kể cả dạng literal `\e[`/`\033[`/`\x1b[`) → màu/bold từng run; `text` luôn được strip code để rule + parse số không đổi; màu ANSI thắng màu rule ở run đó.
+- `maxWidth` (points, 0 = không giới hạn) cắt text bằng ellipsis đuôi để status item không vượt quá bề ngang đó.
