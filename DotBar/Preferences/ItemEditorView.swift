@@ -15,41 +15,62 @@ struct ItemEditorView: View {
             }
 
             Section("Source") {
-                TextField("Name", text: $item.name)
+                LabeledContent("Name") {
+                    TextField("", text: $item.name).labelsHidden()
+                }
                 Picker("Type", selection: sourceKind) {
                     Text("Static text").tag(0)
                     Text("Script").tag(1)
                 }.pickerStyle(.segmented)
                 switch item.source {
                 case .static(let text):
-                    TextField("Text", text: Binding(get: { text }, set: { item.source = .static(text: $0) }))
+                    LabeledContent("Text") {
+                        TextField("", text: Binding(get: { text }, set: { item.source = .static(text: $0) }))
+                            .labelsHidden()
+                    }
                 case .script(let cmd, let secs):
                     commandField(cmd) { item.source = .script(command: $0, refreshSeconds: secs) }
                     Toggle("Streaming", isOn: streaming)
-                    HStack {
-                        TextField("Refresh every", value: Binding(get: { secs }, set: { item.source = .script(command: cmd, refreshSeconds: max(0, $0)) }),
-                                  format: .number).frame(width: 80)
-                        Text("seconds (0 = manual)").foregroundStyle(.secondary)
+                    LabeledContent("Refresh every") {
+                        HStack(spacing: 6) {
+                            TextField("", value: Binding(get: { secs },
+                                                         set: { item.source = .script(command: cmd, refreshSeconds: max(0, $0)) }),
+                                      format: .number)
+                                .labelsHidden()
+                                .frame(width: 72)
+                                .multilineTextAlignment(.trailing)
+                            Text("seconds (0 = manual)").foregroundStyle(.secondary).fixedSize()
+                        }
                     }
                     scriptHints
                 case .stream(let cmd):
                     commandField(cmd) { item.source = .stream(command: $0) }
                     Toggle("Streaming", isOn: streaming)
-                    Text("Print a `~~~` line to end each update block.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("The command runs once and keeps running; DotBar updates the item on every block (or every line, if the script never prints `~~~`). Refresh restarts it.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Print a `~~~` line to end each update block.")
+                        Text("The command runs once and keeps running; DotBar updates the item on every block (or every line, if the script never prints `~~~`). Refresh restarts it.")
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     scriptHints
                 }
             }
 
             Section("Text style") {
                 FontPicker(spec: $item.font)
-                TextField("SF Symbol", text: Binding(get: { item.symbol ?? "" }, set: { item.symbol = $0.isEmpty ? nil : $0 }),
-                          prompt: Text("e.g. bolt.fill (empty = none)"))
-                HStack {
-                    TextField("Max width", value: $item.maxWidth, format: .number).frame(width: 80)
-                    Text("points (0 = unlimited)").foregroundStyle(.secondary)
+                LabeledContent("SF Symbol") {
+                    TextField("", text: Binding(get: { item.symbol ?? "" }, set: { item.symbol = $0.isEmpty ? nil : $0 }),
+                              prompt: Text("e.g. bolt.fill (empty = none)"))
+                        .labelsHidden()
+                }
+                LabeledContent("Max width") {
+                    HStack(spacing: 6) {
+                        TextField("", value: $item.maxWidth, format: .number)
+                            .labelsHidden()
+                            .frame(width: 72)
+                            .multilineTextAlignment(.trailing)
+                        Text("points (0 = unlimited)").foregroundStyle(.secondary).fixedSize()
+                    }
                 }
                 ColorSpecEditor(title: "Text color", spec: $item.textColor, allowSystem: true)
             }
@@ -61,11 +82,18 @@ struct ItemEditorView: View {
                 Picker("Dot style", selection: $item.dotStyle) {
                     ForEach(DotStyle.allCases) { Text($0.label).tag($0) }
                 }
-                Stepper(value: $item.dotSize, in: 5...9, step: 1) { Text("Dot size \(Int(item.dotSize)) pt") }
+                LabeledContent("Dot size") {
+                    HStack(spacing: 6) {
+                        Text("\(Int(item.dotSize)) pt").monospacedDigit().fixedSize()
+                        Stepper("", value: $item.dotSize, in: 5...9, step: 1).labelsHidden()
+                    }
+                }
                 ClickActionPicker(title: "Left click", action: $item.action)
                 ClickActionPicker(title: "⌥ + click", action: $item.altAction)
                 ClickActionPicker(title: "Middle click", action: $item.middleAction)
-                Text("Right click always shows the menu.").font(.caption).foregroundStyle(.secondary)
+                Text("Right click always shows the menu.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Section {
@@ -84,12 +112,15 @@ struct ItemEditorView: View {
                 }
                 Text("Notifications start from the second result, so launching the app is quiet.")
                     .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 HotkeyRecorder(label: "Refresh hotkey", hotkey: $item.hotkey)
                 Text("Global shortcut that refreshes this item. At least one modifier is required.")
                     .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Toggle("Hide when empty", isOn: $item.hideWhenEmpty)
                 Text("Removes the status item from the menu bar while the output is empty.")
                     .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .formStyle(.grouped)
@@ -110,23 +141,40 @@ struct ItemEditorView: View {
 
     /// Command text field + the "…" file picker, shared by scripts and streams.
     private func commandField(_ cmd: String, set: @escaping (String) -> Void) -> some View {
-        HStack(alignment: .top) {
-            TextField("Command", text: Binding(get: { cmd }, set: set),
-                      prompt: Text("e.g. curl -s https://… | jq -r .price"), axis: .vertical)
-                .lineLimit(2...5).font(.system(.body, design: .monospaced))
-            Button("…") { if let c = FilePicker.chooseScriptCommand() { set(c) } }
-                .help("Choose a script file")
+        LabeledContent {
+            HStack(alignment: .top, spacing: 8) {
+                TextField("", text: Binding(get: { cmd }, set: set),
+                          prompt: Text("e.g. curl -s https://… | jq -r .price"), axis: .vertical)
+                    .labelsHidden()
+                    .lineLimit(2...6)
+                    .font(.system(.body, design: .monospaced))
+                Button("…") { if let c = FilePicker.chooseScriptCommand() { set(c) } }
+                    .help("Choose a script file")
+            }
+        } label: {
+            Text("Command").fixedSize()
         }
     }
 
-    @ViewBuilder
+    /// Collapsed cheat-sheet for what a script can print.
     private var scriptHints: some View {
-        Text("Tip: extra output lines become menu items (a line of `----` is a separator). ANSI colors (`\\e[31m`, `\\e[1;32m`, `\\e[38;5;N m`) are rendered.")
-            .font(.caption).foregroundStyle(.secondary)
-        Text("Any line can end with xbar-style params — `Build ok | color=red href=https://… bash=\"make\" refresh=true sfimage=hammer length=20` — and `--` prefixes nest lines into submenus.")
-            .font(.caption).foregroundStyle(.secondary)
-        Text("Or output JSON: `{\"text\":\"…\",\"color\":\"#hex\",\"dots\":[\"#hex\",…],\"menu\":[\"line\",\"----\",\"line\"],\"symbol\":\"bolt.fill\",\"refresh\":30,\"action\":\"copy\" | {\"url\":\"…\"} | {\"script\":\"…\"},\"mode\":\"dotsOnly\",\"badge\":\"3\",\"badgeColor\":\"#FF9F0A\"}`")
-            .font(.caption).foregroundStyle(.secondary)
+        DisclosureGroup("Output syntax help") {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Extra output lines become menu items — a line of \(Text("----").monospaced()) is a separator.")
+                Text("ANSI colors are rendered: \(Text("\\e[31m").monospaced()), \(Text("\\e[1;32m").monospaced()), \(Text("\\e[38;5;Nm").monospaced()).")
+                Text("xbar-style params after a \(Text("|").monospaced()): \(Text("color= href= bash= refresh= sfimage= length=").monospaced()).")
+                Text("A \(Text("--").monospaced()) prefix nests the line into a submenu.")
+                Text("Or print JSON with any of \(Text("text, color, dots, menu, symbol, refresh, action, mode, badge, badgeColor").monospaced()).")
+                Link("Full reference (Recipes.md)",
+                     destination: URL(string: "https://github.com/ptrinh/DotBar/blob/main/Recipes.md")!)
+                    .padding(.top, 2)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.leading, 12)
+            .padding(.top, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var sourceKind: Binding<Int> {
@@ -167,10 +215,15 @@ struct ClickActionPicker: View {
         }
         switch action {
         case .script(let cmd):
-            TextField("Command", text: Binding(get: { cmd }, set: { action = .script(command: $0) }))
-                .font(.system(.body, design: .monospaced))
+            LabeledContent("Command") {
+                TextField("", text: Binding(get: { cmd }, set: { action = .script(command: $0) }))
+                    .labelsHidden()
+                    .font(.system(.body, design: .monospaced))
+            }
         case .openURL(let u):
-            TextField("URL", text: Binding(get: { u }, set: { action = .openURL(url: $0) }))
+            LabeledContent("URL") {
+                TextField("", text: Binding(get: { u }, set: { action = .openURL(url: $0) })).labelsHidden()
+            }
         default: EmptyView()
         }
     }
@@ -199,13 +252,16 @@ struct FontPicker: View {
         Picker("Font", selection: Binding(get: { spec.family ?? "System" }, set: { spec.family = $0 == "System" ? nil : $0 })) {
             ForEach(families, id: \.self) { Text($0).tag($0) }
         }
-        HStack {
-            Picker("Weight", selection: $spec.weight) {
-                ForEach(FontSpec.Weight.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
-            }
-            Stepper(value: $spec.size, in: 8...20, step: 1) { Text("Size \(Int(spec.size))") }.frame(width: 120)
-            Toggle("Monospaced digits", isOn: $spec.monospacedDigits)
+        Picker("Weight", selection: $spec.weight) {
+            ForEach(FontSpec.Weight.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
         }
+        LabeledContent("Size") {
+            HStack(spacing: 6) {
+                Text("\(Int(spec.size)) pt").monospacedDigit().fixedSize()
+                Stepper("", value: $spec.size, in: 8...20, step: 1).labelsHidden()
+            }
+        }
+        Toggle("Monospaced digits", isOn: $spec.monospacedDigits)
     }
 }
 
@@ -217,25 +273,45 @@ struct DotsEditor: View {
     var body: some View {
         ForEach($dots) { $dot in
             DisclosureGroup {
-                Picker("Value from", selection: Binding(get: { dot.source.isScript ? 1 : 0 }, set: { v in
-                    dot.source = v == 0 ? .mainValue : .script(command: "", refreshSeconds: 60)
-                })) {
-                    Text("Item's text").tag(0)
-                    Text("Own script").tag(1)
-                }
-                if case .script(let cmd, let secs) = dot.source {
-                    TextField("Command", text: Binding(get: { cmd }, set: { dot.source = .script(command: $0, refreshSeconds: secs) }))
-                        .font(.system(.body, design: .monospaced))
-                    HStack {
-                        TextField("Refresh every", value: Binding(get: { secs }, set: { dot.source = .script(command: cmd, refreshSeconds: max(0, $0)) }), format: .number).frame(width: 80)
-                        Text("seconds").foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 10) {
+                    LabeledContent("Value from") {
+                        Picker("", selection: Binding(get: { dot.source.isScript ? 1 : 0 }, set: { v in
+                            dot.source = v == 0 ? .mainValue : .script(command: "", refreshSeconds: 60)
+                        })) {
+                            Text("Item's text").tag(0)
+                            Text("Own script").tag(1)
+                        }
+                        .labelsHidden()
+                        .frame(width: 180)
                     }
+                    if case .script(let cmd, let secs) = dot.source {
+                        LabeledContent("Command") {
+                            TextField("", text: Binding(get: { cmd }, set: { dot.source = .script(command: $0, refreshSeconds: secs) }),
+                                      prompt: Text("e.g. curl -s https://… | jq -r .status"))
+                                .labelsHidden()
+                                .font(.system(.body, design: .monospaced))
+                        }
+                        LabeledContent("Refresh every") {
+                            HStack(spacing: 6) {
+                                TextField("", value: Binding(get: { secs },
+                                                             set: { dot.source = .script(command: cmd, refreshSeconds: max(0, $0)) }),
+                                          format: .number)
+                                    .labelsHidden()
+                                    .frame(width: 72)
+                                    .multilineTextAlignment(.trailing)
+                                Text("seconds").foregroundStyle(.secondary).fixedSize()
+                            }
+                        }
+                    }
+                    ColorSpecEditor(title: "Color", spec: $dot.color, allowSystem: false)
                 }
-                ColorSpecEditor(title: "Color", spec: $dot.color, allowSystem: false)
+                .padding(.leading, 12)
+                .padding(.top, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
             } label: {
                 HStack {
                     Circle().fill(Color(nsColor: RuleEngine.color(for: dot.color, output: nil) ?? .gray)).frame(width: 8, height: 8)
-                    Text("Dot \((dots.firstIndex(where: { $0.id == dot.id }) ?? 0) + 1)")
+                    Text("Dot \((dots.firstIndex(where: { $0.id == dot.id }) ?? 0) + 1)").fixedSize()
                     Spacer()
                     Button(role: .destructive) { dots.removeAll { $0.id == dot.id } } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
                 }
@@ -243,6 +319,8 @@ struct DotsEditor: View {
         }
         if dots.count < 3 {
             Button { dots.append(Dot()) } label: { Label("Add dot", systemImage: "plus.circle") }
+                .buttonStyle(.borderless)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -286,16 +364,26 @@ struct HexColorField: View {
     let allowNil: Bool
 
     var body: some View {
-        HStack {
-            Text(label)
-            Spacer()
-            ColorPicker("", selection: Binding(
-                get: { Color(nsColor: NSColor(hex: hex) ?? .labelColor) },
-                set: { hex = NSColor($0).hexString }
-            ), supportsOpacity: false).labelsHidden()
-            TextField("#RRGGBB", text: Binding(get: { hex ?? "" }, set: { hex = $0.isEmpty && allowNil ? nil : $0 }))
-                .font(.system(.body, design: .monospaced)).frame(width: 90)
-            if allowNil && hex != nil { Button("Reset") { hex = nil }.buttonStyle(.link) }
+        LabeledContent {
+            HStack(spacing: 8) {
+                ColorPicker("", selection: Binding(
+                    get: { Color(nsColor: NSColor(hex: hex) ?? .labelColor) },
+                    set: { hex = NSColor($0).hexString }
+                ), supportsOpacity: false).labelsHidden()
+                TextField("", text: Binding(get: { hex ?? "" }, set: { hex = $0.isEmpty && allowNil ? nil : $0 }),
+                          prompt: Text("#RRGGBB"))
+                    .labelsHidden()
+                    .font(.system(.body, design: .monospaced))
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.leading)
+                    .frame(width: 96)
+                if allowNil && hex != nil {
+                    Button("Reset") { hex = nil }.buttonStyle(.link)
+                }
+            }
+            .fixedSize()
+        } label: {
+            Text(label).fixedSize()
         }
     }
 }
@@ -306,38 +394,56 @@ struct RulesEditor: View {
     @Binding var rules: [Rule]
 
     var body: some View {
-        ForEach($rules) { $rule in
-            HStack(spacing: 8) {
-                Picker("", selection: Binding(get: { rule.condition.kind }, set: { rule.condition = $0.makeDefault() })) {
-                    ForEach(Condition.Kind.allCases) { Text($0.rawValue).tag($0) }
-                }.labelsHidden().frame(width: 150)
-                conditionFields($rule)
-                Spacer(minLength: 0)
-                ColorPicker("", selection: Binding(
-                    get: { Color(nsColor: NSColor(hex: rule.color) ?? .gray) },
-                    set: { rule.color = NSColor($0).hexString }), supportsOpacity: false).labelsHidden()
-                TextField("#hex", text: $rule.color).font(.system(.caption, design: .monospaced)).frame(width: 76)
-                Button { rules.removeAll { $0.id == rule.id } } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless)
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach($rules) { $rule in
+                HStack(spacing: 8) {
+                    Picker("", selection: Binding(get: { rule.condition.kind }, set: { rule.condition = $0.makeDefault() })) {
+                        ForEach(Condition.Kind.allCases) { Text($0.rawValue).tag($0) }
+                    }.labelsHidden().frame(width: 150)
+                    conditionFields($rule)
+                    Spacer(minLength: 8)
+                    ColorPicker("", selection: Binding(
+                        get: { Color(nsColor: NSColor(hex: rule.color) ?? .gray) },
+                        set: { rule.color = NSColor($0).hexString }), supportsOpacity: false).labelsHidden()
+                    TextField("", text: $rule.color, prompt: Text("#hex"))
+                        .labelsHidden()
+                        .font(.system(.body, design: .monospaced))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 96)
+                    Button { rules.removeAll { $0.id == rule.id } } label: { Image(systemName: "minus.circle") }
+                        .buttonStyle(.borderless)
+                }
+            }
+            .onMove { rules.move(fromOffsets: $0, toOffset: $1) }
+            Button { rules.append(Rule()) } label: { Label("Add rule", systemImage: "plus.circle").font(.callout) }
+                .buttonStyle(.borderless)
+            if !rules.isEmpty {
+                Text("First matching rule wins, top to bottom.").font(.caption).foregroundStyle(.secondary)
             }
         }
-        .onMove { rules.move(fromOffsets: $0, toOffset: $1) }
-        Button { rules.append(Rule()) } label: { Label("Add rule", systemImage: "plus.circle") }
-        if !rules.isEmpty { Text("First matching rule wins, top to bottom.").font(.caption).foregroundStyle(.secondary) }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
     private func conditionFields(_ rule: Binding<Rule>) -> some View {
         switch rule.wrappedValue.condition {
         case .numberInRange(let min, let max):
-            TextField("min", value: Binding(get: { min }, set: { rule.wrappedValue.condition = .numberInRange(min: $0, max: max) }), format: .number).frame(width: 60)
-            Text("≤ n ≤").foregroundStyle(.secondary)
-            TextField("max", value: Binding(get: { max }, set: { rule.wrappedValue.condition = .numberInRange(min: min, max: $0) }), format: .number).frame(width: 60)
+            TextField("", value: Binding(get: { min }, set: { rule.wrappedValue.condition = .numberInRange(min: $0, max: max) }),
+                      format: .number, prompt: Text("min"))
+                .labelsHidden().frame(width: 64).multilineTextAlignment(.trailing)
+            Text("≤ n ≤").foregroundStyle(.secondary).fixedSize()
+            TextField("", value: Binding(get: { max }, set: { rule.wrappedValue.condition = .numberInRange(min: min, max: $0) }),
+                      format: .number, prompt: Text("max"))
+                .labelsHidden().frame(width: 64).multilineTextAlignment(.trailing)
         case .regex(let p):
-            TextField("pattern", text: Binding(get: { p }, set: { rule.wrappedValue.condition = .regex(pattern: $0) })).font(.system(.body, design: .monospaced))
+            TextField("", text: Binding(get: { p }, set: { rule.wrappedValue.condition = .regex(pattern: $0) }), prompt: Text("pattern"))
+                .labelsHidden().font(.system(.body, design: .monospaced))
         case .contains(let t):
-            TextField("text", text: Binding(get: { t }, set: { rule.wrappedValue.condition = .contains(text: $0) }))
+            TextField("", text: Binding(get: { t }, set: { rule.wrappedValue.condition = .contains(text: $0) }), prompt: Text("text"))
+                .labelsHidden()
         case .equals(let t):
-            TextField("text", text: Binding(get: { t }, set: { rule.wrappedValue.condition = .equals(text: $0) }))
+            TextField("", text: Binding(get: { t }, set: { rule.wrappedValue.condition = .equals(text: $0) }), prompt: Text("text"))
+                .labelsHidden()
         case .isEmpty, .scriptFailed:
             EmptyView()
         }
@@ -352,16 +458,20 @@ struct HotkeyRecorder: View {
     @State private var recording = false
 
     var body: some View {
-        HStack {
-            Text(label)
-            Spacer()
-            Text(recording ? "Press keys…" : (hotkey?.display ?? "None"))
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(recording ? Color.accentColor : (hotkey == nil ? Color.secondary : Color.primary))
-            Button(recording ? "Cancel" : "Record") { recording.toggle() }
-            Button("Clear") { hotkey = nil; recording = false }.disabled(hotkey == nil)
-            KeyCaptureView(recording: $recording) { hotkey = $0; recording = false }
-                .frame(width: 1, height: 1)
+        LabeledContent {
+            HStack(spacing: 8) {
+                Text(recording ? "Press keys…" : (hotkey?.display ?? "None"))
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(recording ? Color.accentColor : (hotkey == nil ? Color.secondary : Color.primary))
+                    .fixedSize()
+                Button(recording ? "Cancel" : "Record") { recording.toggle() }
+                Button("Clear") { hotkey = nil; recording = false }.disabled(hotkey == nil)
+                KeyCaptureView(recording: $recording) { hotkey = $0; recording = false }
+                    .frame(width: 1, height: 1)
+            }
+            .fixedSize()
+        } label: {
+            Text(label).fixedSize()
         }
     }
 }

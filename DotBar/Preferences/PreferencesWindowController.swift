@@ -16,8 +16,8 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
             let w = NSWindow(contentViewController: NSHostingController(rootView: root))
             w.title = "DotBar Preferences"
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            w.setContentSize(NSSize(width: 860, height: 560))
-            w.minSize = NSSize(width: 720, height: 460)
+            w.setContentSize(NSSize(width: 900, height: 640))
+            w.minSize = NSSize(width: 760, height: 520)
             w.center()
             w.isReleasedWhenClosed = false
             w.delegate = self
