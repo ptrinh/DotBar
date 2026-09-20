@@ -144,6 +144,7 @@ final class StatusItemController: NSObject {
         menu.addItem(mk("Edit \"\(item.name)\"…", #selector(menuEdit), "e"))
         menu.addItem(mk("Preferences…", #selector(menuPrefs), ","))
         menu.addItem(mk(LaunchAtLogin.isEnabled ? "Launch at Login ✓" : "Launch at Login", #selector(menuLogin)))
+        menu.addItem(mk("About DotBar", #selector(menuAbout)))
         menu.addItem(.separator())
         menu.addItem(mk("Quit DotBar", #selector(menuQuit), "q"))
         return menu
@@ -258,5 +259,13 @@ final class StatusItemController: NSObject {
     @objc private func menuEdit() { PreferencesWindowController.shared.show(selecting: itemID) }
     @objc private func menuPrefs() { PreferencesWindowController.shared.show() }
     @objc private func menuLogin() { LaunchAtLogin.toggle() }
+    @objc private func menuAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .credits: NSAttributedString(string: "Custom text and status dots for the macOS menu bar.",
+                                         attributes: [.font: NSFont.systemFont(ofSize: 11)]),
+            NSApplication.AboutPanelOptionKey(rawValue: "Copyright"): "© 2026 Phil Trinh. All rights reserved.",
+        ])
+    }
     @objc private func menuQuit() { NSApp.terminate(nil) }
 }

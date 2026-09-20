@@ -50,6 +50,7 @@ final class AppState: ObservableObject {
 
     func start() {
         isStarting = true
+        LaunchAtLogin.enableOnFirstLaunch()
         suppressPersist = true
         items = Store.load()
         suppressPersist = false

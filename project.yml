@@ -44,7 +44,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
-        NSHumanReadableCopyright: "© 2026 Phil Trinh"
+        NSHumanReadableCopyright: "© 2026 Phil Trinh. All rights reserved."
         NSPrincipalClass: NSApplication
         CFBundleURLTypes:
           - CFBundleURLName: DotBar URL
