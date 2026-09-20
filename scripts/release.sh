@@ -78,3 +78,8 @@ end
 CASK
 ( cd "$TAP_DIR" && git add Casks/dotbar.rb && git commit -qm "dotbar $VERSION" && git push -q )
 echo "==> Done. Install: brew install --cask ptrinh/tap/dotbar"
+# Local convenience: if the brew-installed app is present, upgrade and relaunch it.
+if [[ -d /Applications/DotBar.app ]] && command -v brew >/dev/null; then
+  brew update >/dev/null 2>&1 || true
+  brew upgrade --cask dotbar >/dev/null 2>&1 && { pkill -x DotBar || true; sleep 1; open /Applications/DotBar.app; echo "==> Relaunched /Applications/DotBar.app $(defaults read /Applications/DotBar.app/Contents/Info.plist CFBundleShortVersionString)"; }
+fi
