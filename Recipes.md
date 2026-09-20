@@ -215,9 +215,9 @@ curl -s --max-time 8 -A "Mozilla/5.0" "https://query1.finance.yahoo.com/v8/finan
 ```
 
 ### Exchange Rates — every 3600s
-The bar shows the pair set by `B=` and `Q=` at the start of the command (default USD/VND). The dropdown has one submenu per base currency (USD, EUR, GBP, AUD, CNY, JPY, SGD, CAD, VND), each listing its 8 cross rates: 72 pairs from one request to open.er-api.com.
+The bar shows the pair set by `B=` and `Q=` at the start of the command (default EUR/USD). The dropdown has one submenu per base currency (USD, EUR, GBP, AUD, CNY, JPY, SGD, CAD, VND), each listing its 8 cross rates: 72 pairs from one request to open.er-api.com.
 ```sh
-B=USD; Q=VND; curl -s --max-time 8 "https://open.er-api.com/v6/latest/USD" | tr ',' '\n' | sed -nE 's/.*"(USD|VND|EUR|CNY|JPY|SGD|GBP|CAD|AUD)":([0-9.]+).*/\1 \2/p' | awk -v b="$B" -v q="$Q" 'function f(v){ if (v>=1000) return sprintf("%\047.0f",v); if (v>=10) return sprintf("%.2f",v); if (v>=0.01) return sprintf("%.4f",v); return sprintf("%.6f",v) } {r[$1]=$2} END{ if (r[b]==0||r[q]==0) {print "—"; exit} n=split("USD EUR GBP AUD CNY JPY SGD CAD VND",c," "); printf "%s/%s %s\n", b, q, f(r[q]/r[b]); for(i=1;i<=n;i++){ x=c[i]; printf "%s →\n", x; for(j=1;j<=n;j++){ y=c[j]; if (y==x) continue; printf "--%s/%s  %s\n", x, y, f(r[y]/r[x]) } } }'
+B=EUR; Q=USD; curl -s --max-time 8 "https://open.er-api.com/v6/latest/USD" | tr ',' '\n' | sed -nE 's/.*"(USD|VND|EUR|CNY|JPY|SGD|GBP|CAD|AUD)":([0-9.]+).*/\1 \2/p' | awk -v b="$B" -v q="$Q" 'function f(v){ if (v>=1000) return sprintf("%\047.0f",v); if (v>=10) return sprintf("%.2f",v); if (v>=0.01) return sprintf("%.4f",v); return sprintf("%.6f",v) } {r[$1]=$2} END{ if (r[b]==0||r[q]==0) {print "—"; exit} n=split("USD EUR GBP AUD CNY JPY SGD CAD VND",c," "); printf "%s/%s %s\n", b, q, f(r[q]/r[b]); for(i=1;i<=n;i++){ x=c[i]; printf "%s →\n", x; for(j=1;j<=n;j++){ y=c[j]; if (y==x) continue; printf "--%s/%s  %s\n", x, y, f(r[y]/r[x]) } } }'
 ```
 
 ### Gold XAU / USD — every 900s
