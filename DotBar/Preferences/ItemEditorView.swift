@@ -24,9 +24,15 @@ struct ItemEditorView: View {
                 case .static(let text):
                     TextField("Text", text: Binding(get: { text }, set: { item.source = .static(text: $0) }))
                 case .script(let cmd, let secs):
-                    TextField("Command", text: Binding(get: { cmd }, set: { item.source = .script(command: $0, refreshSeconds: secs) }),
-                              prompt: Text("e.g. curl -s https://… | jq -r .price"), axis: .vertical)
-                        .lineLimit(2...5).font(.system(.body, design: .monospaced))
+                    HStack(alignment: .top) {
+                        TextField("Command", text: Binding(get: { cmd }, set: { item.source = .script(command: $0, refreshSeconds: secs) }),
+                                  prompt: Text("e.g. curl -s https://… | jq -r .price"), axis: .vertical)
+                            .lineLimit(2...5).font(.system(.body, design: .monospaced))
+                        Button("…") {
+                            if let c = FilePicker.chooseScriptCommand() { item.source = .script(command: c, refreshSeconds: secs) }
+                        }
+                        .help("Choose a script file")
+                    }
                     HStack {
                         TextField("Refresh every", value: Binding(get: { secs }, set: { item.source = .script(command: cmd, refreshSeconds: max(0, $0)) }),
                                   format: .number).frame(width: 80)

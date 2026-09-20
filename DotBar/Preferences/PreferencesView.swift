@@ -29,6 +29,13 @@ struct PreferencesView: View {
                     Button {
                         if let id = selection.itemID { state.removeItem(id); selection.itemID = state.items.first?.id }
                     } label: { Image(systemName: "minus") }.disabled(selection.itemID == nil)
+                    Menu {
+                        ForEach(Recipes.all()) { recipe in
+                            Button(recipe.name) { state.items.append(recipe); selection.itemID = recipe.id }
+                        }
+                    } label: { Image(systemName: "sparkles") }
+                    .menuStyle(.borderlessButton).frame(width: 40)
+                    .help("Add a ready-made recipe")
                     Spacer()
                     Menu {
                         Button("Import…") { importItems() }
