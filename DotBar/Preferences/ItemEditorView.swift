@@ -85,7 +85,7 @@ struct ItemEditorView: View {
                 LabeledContent("Dot size") {
                     HStack(spacing: 6) {
                         Text("\(Int(item.dotSize)) pt").monospacedDigit().fixedSize()
-                        Stepper("", value: $item.dotSize, in: 5...9, step: 1).labelsHidden()
+                        Stepper("", value: $item.dotSize, in: 3...14, step: 1).labelsHidden()
                     }
                 }
                 ClickActionPicker(title: "Left click", action: $item.action)
@@ -335,12 +335,17 @@ struct ColorSpecEditor: View {
     let allowSystem: Bool
 
     var body: some View {
-        Picker(title, selection: Binding(get: { isRules ? 1 : 0 }, set: { v in
-            if v == 0 { spec = .fixed(fixedHex ?? (allowSystem ? nil : "#8E8E93")) }
-            else { spec = .rules([], fallback: fixedHex ?? (allowSystem ? nil : "#8E8E93")) }
+        Picker(title, selection: Binding(get: { kind }, set: { v in
+            let base = fixedHex ?? (allowSystem ? nil : "#8E8E93")
+            switch v {
+            case 1: spec = .rules([], fallback: base)
+            case 2: spec = .gradient(min: 0, max: 100, from: (base ?? "#FF453A") + "00", to: base ?? "#FF453A")
+            default: spec = .fixed(base)
+            }
         })) {
             Text("Fixed").tag(0)
             Text("By condition").tag(1)
+            Text("Gradient").tag(2)
         }.pickerStyle(.segmented)
 
         switch spec {
@@ -349,12 +354,28 @@ struct ColorSpecEditor: View {
         case .rules(let rules, let fallback):
             RulesEditor(rules: Binding(get: { rules }, set: { spec = .rules($0, fallback: fallback) }))
             HexColorField(label: allowSystem ? "Otherwise (empty = system)" : "Otherwise", hex: Binding(get: { fallback }, set: { spec = .rules(rules, fallback: $0) }), allowNil: allowSystem)
+        case .gradient(let lo, let hi, let from, let to):
+            LabeledContent("Value range") {
+                HStack(spacing: 6) {
+                    TextField("", value: Binding(get: { lo }, set: { spec = .gradient(min: $0, max: hi, from: from, to: to) }), format: .number)
+                        .labelsHidden().frame(width: 64).multilineTextAlignment(.trailing)
+                    Text("→").foregroundStyle(.secondary)
+                    TextField("", value: Binding(get: { hi }, set: { spec = .gradient(min: lo, max: $0, from: from, to: to) }), format: .number)
+                        .labelsHidden().frame(width: 64).multilineTextAlignment(.trailing)
+                }
+            }
+            HexColorField(label: "Color at min", hex: Binding(get: { from }, set: { spec = .gradient(min: lo, max: hi, from: $0 ?? from, to: to) }), allowNil: false)
+            HexColorField(label: "Color at max", hex: Binding(get: { to }, set: { spec = .gradient(min: lo, max: hi, from: from, to: $0 ?? to) }), allowNil: false)
+            Text("The first number in the value is mapped linearly between the two colors. Alpha is interpolated too, so a transparent start fades in.")
+                .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    private var isRules: Bool { if case .rules = spec { return true } else { return false } }
+    private var kind: Int {
+        switch spec { case .fixed: 0; case .rules: 1; case .gradient: 2 }
+    }
     private var fixedHex: HexColor? {
-        switch spec { case .fixed(let h): h; case .rules(_, let f): f }
+        switch spec { case .fixed(let h): h; case .rules(_, let f): f; case .gradient(_, _, _, let t): String(t.prefix(7)) }
     }
 }
 
@@ -369,7 +390,7 @@ struct HexColorField: View {
                 ColorPicker("", selection: Binding(
                     get: { Color(nsColor: NSColor(hex: hex) ?? .labelColor) },
                     set: { hex = NSColor($0).hexString }
-                ), supportsOpacity: false).labelsHidden()
+                ), supportsOpacity: true).labelsHidden()
                 TextField("", text: Binding(get: { hex ?? "" }, set: { hex = $0.isEmpty && allowNil ? nil : $0 }),
                           prompt: Text("#RRGGBB"))
                     .labelsHidden()

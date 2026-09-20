@@ -189,6 +189,8 @@ typealias HexColor = String
 enum ColorSpec: Codable, Hashable {
     case fixed(HexColor?)
     case rules([Rule], fallback: HexColor?)
+    /// Continuous interpolation: value <= min -> `from`, value >= max -> `to`. Hex may carry alpha (#RRGGBBAA).
+    case gradient(min: Double, max: Double, from: HexColor, to: HexColor)
 }
 
 struct Rule: Identifiable, Codable, Hashable {

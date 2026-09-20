@@ -11,6 +11,11 @@ enum RuleEngine {
                 return NSColor(hex: rule.color)
             }
             return NSColor(hex: fallback)
+        case .gradient(let lo, let hi, let from, let to):
+            guard let a = NSColor(hex: from), let b = NSColor(hex: to) else { return nil }
+            guard let n = output?.number, hi > lo else { return output?.failed == true ? b : a }
+            let t = CGFloat(min(max((n - lo) / (hi - lo), 0), 1))
+            return a.blended(toward: b, fraction: t)
         }
     }
 
@@ -51,9 +56,20 @@ extension NSColor {
         self.init(srgbRed: r, green: g, blue: b, alpha: a)
     }
 
+    /// "#RRGGBB", or "#RRGGBBAA" when not fully opaque.
     var hexString: String {
         let c = usingColorSpace(.sRGB) ?? self
         let r = Int(round(c.redComponent * 255)), g = Int(round(c.greenComponent * 255)), b = Int(round(c.blueComponent * 255))
-        return String(format: "#%02X%02X%02X", r, g, b)
+        let a = Int(round(c.alphaComponent * 255))
+        return a < 255 ? String(format: "#%02X%02X%02X%02X", r, g, b, a) : String(format: "#%02X%02X%02X", r, g, b)
+    }
+
+    /// Linear sRGB interpolation including alpha (NSColor.blended ignores alpha differences poorly).
+    func blended(toward other: NSColor, fraction t: CGFloat) -> NSColor {
+        let a = usingColorSpace(.sRGB) ?? self, b = other.usingColorSpace(.sRGB) ?? other
+        return NSColor(srgbRed: a.redComponent + (b.redComponent - a.redComponent) * t,
+                       green: a.greenComponent + (b.greenComponent - a.greenComponent) * t,
+                       blue: a.blueComponent + (b.blueComponent - a.blueComponent) * t,
+                       alpha: a.alphaComponent + (b.alphaComponent - a.alphaComponent) * t)
     }
 }
