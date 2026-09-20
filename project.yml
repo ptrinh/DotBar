@@ -34,6 +34,9 @@ targets:
     platform: macOS
     sources:
       - path: DotBar
+        excludes: ["Resources/Info.plist"]
+      - path: DotBar/Resources/AppIcon.icns
+        buildPhase: resources
     info:
       path: DotBar/Resources/Info.plist
       properties:
@@ -43,6 +46,7 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
+        CFBundleIconFile: AppIcon
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSHumanReadableCopyright: "© 2026 Phil Trinh. All rights reserved."
         NSPrincipalClass: NSApplication
