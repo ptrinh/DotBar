@@ -9,7 +9,7 @@ settings:
   base:
     SWIFT_VERSION: "5.10"
     MARKETING_VERSION: "0.1.11"
-    CURRENT_PROJECT_VERSION: "44"
+    CURRENT_PROJECT_VERSION: "45"
     CODE_SIGN_STYLE: Automatic
     CODE_SIGN_IDENTITY: "-"
     ENABLE_HARDENED_RUNTIME: NO
@@ -42,7 +42,7 @@ targets:
     platform: macOS
     sources:
       - path: DotBar
-        excludes: ["Resources/Info.plist"]
+        excludes: ["Resources/Info.plist", "Resources/DotBar-AppStore.entitlements"]
       - path: DotBar/Resources/AppIcon.icns
         buildPhase: resources
     info:
@@ -54,6 +54,8 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
+        LSApplicationCategoryType: public.app-category.utilities
+        ITSAppUsesNonExemptEncryption: false
         CFBundleIconFile: AppIcon
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSHumanReadableCopyright: "© 2026 Phil Trinh. All rights reserved."

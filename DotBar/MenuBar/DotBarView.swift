@@ -14,7 +14,7 @@ final class DotBarView: NSView {
     private var badgeColor: NSColor = .systemRed
 
     static let dotSize: CGFloat = 6, dotGap: CGFloat = 2, hGap: CGFloat = 4
-    static let barDotWidth: CGFloat = 3, badgeFontSize: CGFloat = 8.5
+    static let barDotWidth: CGFloat = 3, badgeFontSize: CGFloat = 8.5, labelGap: CGFloat = 3
 
     func configure(item: Item, output: ScriptOutput?, dotColors: [NSColor]) {
         mode = output?.displayModeOverride ?? item.displayMode
@@ -34,10 +34,10 @@ final class DotBarView: NSView {
     /// Width of the dot column for the current style, including the optional label column.
     private var dotColumnWidth: CGFloat { dotShapeWidth + labelColumnWidth }
     private var dotShapeWidth: CGFloat { dotStyle == .bar ? Self.barDotWidth : dotSize }
-    /// Widest label (0 when no dot has one) plus a 1pt gap to the dot.
+    /// Widest label (0 when no dot has one) plus a 3pt gap to the dot.
     private var labelColumnWidth: CGFloat {
         let w = dotLabels.map { ceil($0.size().width) }.max() ?? 0
-        return w > 0 ? w + 1 : 0
+        return w > 0 ? w + Self.labelGap : 0
     }
 
     /// Label glyph sized so its cap height ≈ the dot diameter.
@@ -100,7 +100,7 @@ final class DotBarView: NSView {
                 let ls = dotLabels[i].size()
                 // Right-align the glyph in the label column; center it on the dot (visual cap height ≈ 0.7 em).
                 let capH = ls.height * 0.72
-                dotLabels[i].draw(at: NSPoint(x: round(x + lw - 1 - ls.width), y: round(y + (h - capH) / 2 - (ls.height - capH) * 0.5)))
+                dotLabels[i].draw(at: NSPoint(x: round(x + lw - Self.labelGap - ls.width), y: round(y + (h - capH) / 2 - (ls.height - capH) * 0.5)))
             }
             c.setFill()
             let r = NSRect(x: ix, y: round(y), width: w, height: h)

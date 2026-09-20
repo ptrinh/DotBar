@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- App Sandbox is mandatory on the Mac App Store. Scripts spawned via /bin/zsh inherit it. -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <!-- curl / API recipes -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <!-- "…" script file picker and Import/Export JSON -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+</dict>
+</plist>

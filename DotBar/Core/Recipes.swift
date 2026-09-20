@@ -5,10 +5,27 @@ import Foundation
 enum Recipes {
 
     /// Fresh UUIDs on every call, so a recipe can be added more than once.
+    /// Mac App Store build runs inside the App Sandbox: `top`, `ps`, `ping`, `ipconfig getifaddr`, `git` are denied there.
+    static let isSandboxed = ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+
+    /// CPU % : `top` outside the sandbox, 1-minute load average / core count inside it.
+    static var cpuPercentCommand: String {
+        isSandboxed
+            ? #"awk -v l="$(sysctl -n vm.loadavg | awk '{print $2}')" -v n="$(sysctl -n hw.ncpu)" 'BEGIN{p=l/n*100; if(p>100)p=100; printf "%.0f", p}'"#
+            : #"top -l 1 -n 0 | awk '/CPU usage/ {printf "%.0f", $3+$5}'"#
+    }
+    static var localIPCommand: String {
+        isSandboxed ? #"ifconfig en0 | awk '/inet /{print $2}'"# : #"ipconfig getifaddr en0"#
+    }
+
+    /// Recipes whose commands the App Sandbox denies (ping raw sockets, git via xcrun, ipconfig SSID).
+    private static let sandboxUnavailable: Set<String> = ["Ping 1.1.1.1", "Ping stream", "Git Branch", "Wi-Fi SSID"]
+
     static func all() -> [Item] {
         [cpuLoad, memoryUsed, battery, publicIP, localIP, wifiSSID,
          btcPrice, btc3Digits, btcWithLoadDots, diskFree, uptime, gitBranch, ping, clock,
          pingStream, logTail]
+            .filter { !isSandboxed || !sandboxUnavailable.contains($0.name) }
     }
 
     // MARK: - Recipes
@@ -43,7 +60,7 @@ enum Recipes {
 
     private static var localIP: Item {
         Item(name: "Local IP",
-             source: .script(command: #"ipconfig getifaddr en0 || echo "—""#, refreshSeconds: 60))
+             source: .script(command: localIPCommand + #" || echo "—""#, refreshSeconds: 60))
     }
 
     private static var wifiSSID: Item {
@@ -69,14 +86,14 @@ enum Recipes {
     /// First 3 digits of the BTC price as text; dot 1 fades transparent -> red with CPU %, dot 2 transparent -> yellow with RAM %.
     private static var btcWithLoadDots: Item {
         let btc = #"curl -s --max-time 8 https://api.coinbase.com/v2/prices/BTC-USD/spot | sed -E 's/.*"amount":"([0-9]+)[."].*/\1/' | cut -c1-3"#
-        let cpu = #"top -l 1 -n 0 | awk '/CPU usage/ {printf "%.0f", $3+$5}'"#
+        let cpu = cpuPercentCommand
         let ram = #"vm_stat | awk '/Pages free/{f=$3} /Pages active/{a=$3} /Pages inactive/{i=$3} /Pages speculative/{s=$3} /Pages wired down/{w=$4} /Pages occupied by compressor/{c=$5} END{gsub(/[^0-9]/,"",f);gsub(/[^0-9]/,"",a);gsub(/[^0-9]/,"",i);gsub(/[^0-9]/,"",s);gsub(/[^0-9]/,"",w);gsub(/[^0-9]/,"",c); t=f+a+i+s+w+c; if (t>0) printf "%.0f", (a+w+c)*100/t}'"#
         var i = Item(name: "BTC 3 digits + CPU/RAM dots", source: .script(command: btc, refreshSeconds: 60))
         i.dots = [
             Dot(source: .script(command: cpu, refreshSeconds: 10),
-                color: .gradient(min: 0, max: 100, from: "#FF453A00", to: "#FF453A"), label: "C"),
+                color: .gradient(min: 40, max: 100, from: "#FF453A00", to: "#FF453A"), label: "C"),
             Dot(source: .script(command: ram, refreshSeconds: 15),
-                color: .gradient(min: 0, max: 100, from: "#FFD60A00", to: "#FFD60A"), label: "M"),
+                color: .gradient(min: 50, max: 100, from: "#FFD60A00", to: "#FFD60A"), label: "M"),
         ]
         i.dotSize = 7
         return i
