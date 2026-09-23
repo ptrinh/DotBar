@@ -29,6 +29,15 @@ Three more keys control how the item is drawn for that update:
 {"text": "Inbox", "symbol": "tray.fill", "mode": "symbolOnly", "badge": 12, "badgeColor": "#FF9F0A"}
 ```
 
+A `text` containing `\n` is drawn as small lines stacked to fit the bar, e.g. `{"text": "Sep\nWed"}`.
+
+`symbol` also accepts a drawn calendar page instead of an SF Symbol:
+
+| Symbol | Draws |
+|---|---|
+| `calendar:<day>` | day number under a faint strip, sized to two stacked lines |
+| `calendar:<day>:<label>[:<color>]` | `label` (e.g. weekday) in the strip, day number below; `color` (`black`, `red`, `blue`, `#hex`, `light,dark` pair…) fills the strip, empty = subtle monochrome |
+
 For the number-range rules, DotBar parses the **first number** in the output — so `"14%"`,
 `"15.7 ms"` and `"$80574"` all work directly.
 
@@ -153,6 +162,12 @@ ping -c1 -W2000 1.1.1.1 | sed -nE 's/.*time=([0-9.]+).*/\1 ms/p' || echo "—"
 Any `strftime` format works; see `man strftime`.
 ```sh
 date +"%a %d %H:%M"
+```
+
+### Calendar Icon — every 60s
+Weekday on top, day number below. Change `C=` for the strip colour.
+```sh
+C=black; date +'{"text":"","symbol":"calendar:%-d:%a:'"$C"'"}'
 ```
 
 ### Swap Used — every 30s

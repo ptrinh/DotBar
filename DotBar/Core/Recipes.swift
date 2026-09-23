@@ -30,7 +30,7 @@ enum Recipes {
          // Finance
          btcPrice, btc3Digits, btcWithLoadDots, ethPrice, stockQuote, exchangeRates, goldPrice,
          // Weather & time
-         weather, airQuality, clock, worldClock, countdown,
+         weather, airQuality, clock, calendarIcon, worldClock, countdown,
          // Dev & streaming
          gitBranch, pingStream, logTail]
             .filter { !isSandboxed || !sandboxUnavailable.contains($0.name) }
@@ -274,6 +274,13 @@ enum Recipes {
                                      refreshSeconds: 1800))
         i.dots = [dot(ranges: [(nil, 50, green), (50, 100, "#FFD60A"), (100, 150, orange), (150, nil, red)])]
         return i
+    }
+
+    /// Single calendar page: weekday in the header, day number below.
+    /// C= header colour: red, blue, any name or #hex; empty = subtle monochrome.
+    private static var calendarIcon: Item {
+        Item(name: "Calendar Icon",
+             source: .script(command: #"C=black; date +'{"text":"","symbol":"calendar:%-d:%a:'"$C"'"}'"#, refreshSeconds: 60))
     }
 
     private static var worldClock: Item {
