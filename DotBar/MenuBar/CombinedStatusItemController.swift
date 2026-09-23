@@ -70,7 +70,7 @@ final class CombinedStatusItemController: NSObject {
         for (idx, item) in items.enumerated() {
             let v = view(for: item.id)
             v.configure(item: item, output: state.output(for: item),
-                        dotColors: state.resolvedDotColors(for: item))
+                        dotColors: state.resolvedDotColors(for: item), history: state.history(for: item))
             let w = v.intrinsicContentSize.width
             x += CGFloat(max(0, item.paddingLeft))
             v.frame = NSRect(x: x, y: 0, width: w, height: height)

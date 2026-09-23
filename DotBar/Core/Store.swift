@@ -66,15 +66,9 @@ enum Store {
     static let encoder: JSONEncoder = { let e = JSONEncoder(); e.outputFormatting = [.prettyPrinted, .sortedKeys]; return e }()
     static let decoder = JSONDecoder()
 
+    /// First launch: battery icon with CPU/RAM dots, plus the calendar icon. On a Mac without a
+    /// battery the battery command prints nothing, so only the two dots show.
     static func defaults() -> [Item] {
-        var cpu = Item(name: "CPU Load",
-                       source: .script(command: #"uptime | sed -E 's/.*load averages?: ([0-9.,]+).*/\1/'"#, refreshSeconds: 10))
-        cpu.dots = [Dot(source: .mainValue, color: .rules([
-            Rule(condition: .numberInRange(min: nil, max: 2), color: "#34C759"),
-            Rule(condition: .numberInRange(min: 2, max: 6), color: "#FF9F0A"),
-            Rule(condition: .numberInRange(min: 6, max: nil), color: "#FF453A"),
-            Rule(condition: .scriptFailed, color: "#FF453A"),
-        ], fallback: "#8E8E93"))]
-        return [cpu]
+        [Recipes.batteryWithLoadDots, Recipes.calendarIcon]
     }
 }

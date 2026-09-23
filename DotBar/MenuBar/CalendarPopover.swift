@@ -3,47 +3,105 @@ import EventKit
 
 /// Month calendar + the selected day's events, shown from a status item (click action `.calendar`).
 ///
-/// Everything is created on open and dropped on close — popover, view and `EKEventStore` —
+/// Shown in a borderless panel, not an `NSPopover`: measured on macOS 27, an empty popover
+/// peaks at ~72 MB and keeps ~10 MB after closing; this panel peaks at ~16 MB and keeps ~2 MB.
+/// Everything is created on open and dropped on close — panel, view and `EKEventStore` —
 /// so the idle app pays nothing for it. One custom-drawn view, no SwiftUI, one event query
 /// per visible month, reloads only on `EKEventStoreChanged` while open.
 @MainActor
-final class CalendarPopover: NSObject, NSPopoverDelegate {
+final class CalendarPopover: NSObject {
     private static var current: CalendarPopover?
+    /// A click on the status item while open can first reach the outside-click monitor (mouse
+    /// down — e.g. on the copy of the item macOS draws on another display) and only then
+    /// `toggle` (mouse up). A close that recent means this click was the closing one.
+    private static var closedAt = Date.distantPast
 
     static func toggle(relativeTo button: NSView) {
-        if let c = current { c.popover.performClose(nil); return }
+        if let c = current { c.close(); return }
+        guard Date().timeIntervalSince(closedAt) > 0.35 else { return }
         let c = CalendarPopover()
         current = c
         c.show(relativeTo: button)
     }
 
-    private let popover = NSPopover()
+    private final class Panel: NSPanel {
+        override var canBecomeKey: Bool { true }
+        var onCancel: () -> Void = {}
+        override func cancelOperation(_ sender: Any?) { onCancel() }     // Esc
+    }
+
+    private var panel: Panel?
     private let view = CalendarView()
     private var store: EKEventStore?
     private var observer: NSObjectProtocol?
+    private var monitors: [Any] = []
+    private weak var anchor: NSView?
 
     private func show(relativeTo button: NSView) {
-        let vc = NSViewController()
-        vc.view = view
+        anchor = button
+        let p = Panel(contentRect: NSRect(origin: .zero, size: view.frame.size),
+                      styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        p.isOpaque = false
+        p.backgroundColor = .clear
+        p.hasShadow = true
+        p.level = .popUpMenu
+        p.isReleasedWhenClosed = false
+        p.onCancel = { [weak self] in self?.close() }
+        let bg = NSVisualEffectView()
+        bg.material = .popover
+        bg.state = .active
+        bg.wantsLayer = true
+        bg.layer?.cornerRadius = 10
+        bg.layer?.masksToBounds = true
+        bg.addSubview(view)
+        p.contentView = bg
+        panel = p
+
         view.onChange = { [weak self] in self?.reload() }
-        view.onResize = { [weak self] size in self?.popover.contentSize = size }
-        view.onClose = { [weak self] in self?.popover.performClose(nil) }
-        popover.contentViewController = vc
-        popover.behavior = .transient
-        popover.animates = false
-        popover.delegate = self
+        view.onResize = { [weak self] _ in self?.place() }
+        view.onClose = { [weak self] in self?.close() }
         reload()
-        NSApp.activate(ignoringOtherApps: true)
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        place()
+        p.makeKeyAndOrderFront(nil)
+
+        // Close on any click outside: other apps (global) or other DotBar windows (local).
+        // A click on the anchor itself is left to `toggle`, which closes on mouse up.
+        let mask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        if let g = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
+            MainActor.assumeIsolated { self?.close() }
+        }) { monitors.append(g) }
+        if let l = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] e in
+            MainActor.assumeIsolated {
+                if let self, e.window !== self.panel, e.window !== self.anchor?.window { self.close() }
+            }
+            return e
+        }) { monitors.append(l) }
         requestAccessIfNeeded()
     }
 
-    func popoverDidClose(_ notification: Notification) {
+    /// Centred under the status item, kept on screen, top edge just below the menu bar.
+    private func place() {
+        guard let p = panel, let button = anchor, let bw = button.window else { return }
+        let size = view.frame.size
+        p.contentView?.frame.size = size
+        view.frame.origin = .zero
+        let r = bw.convertToScreen(button.convert(button.bounds, to: nil))
+        let screen = (bw.screen ?? NSScreen.main)?.visibleFrame ?? .zero
+        var x = r.midX - size.width / 2
+        x = min(max(x, screen.minX + 6), screen.maxX - size.width - 6)
+        p.setFrame(NSRect(x: x, y: r.minY - 6 - size.height, width: size.width, height: size.height), display: true)
+    }
+
+    private func close() {
+        monitors.forEach(NSEvent.removeMonitor)
+        monitors = []
         if let observer { NotificationCenter.default.removeObserver(observer) }
         observer = nil
         store = nil
-        popover.contentViewController = nil
+        panel?.orderOut(nil)
+        panel = nil
         Self.current = nil
+        Self.closedAt = Date()
     }
 
     // MARK: Events
@@ -73,7 +131,8 @@ final class CalendarPopover: NSObject, NSPopoverDelegate {
         let (start, end) = view.gridRange
         let cal = Calendar.current
         var byDay: [Int: [EKEvent]] = [:]
-        for e in s.events(matching: s.predicateForEvents(withStart: start, end: end, calendars: nil)) {
+        let all = s.events(matching: s.predicateForEvents(withStart: start, end: end, calendars: nil))
+        for e in all {
             // Multi-day events appear on every day they touch within the grid.
             guard let s0 = e.startDate else { continue }
             let e0: Date = e.endDate ?? s0
@@ -164,6 +223,13 @@ private final class CalendarView: NSView {
     private static let day = NSFont.monospacedDigitSystemFont(ofSize: 15, weight: .regular)
     private static let dayBold = NSFont.monospacedDigitSystemFont(ofSize: 15, weight: .bold)
     private static let body = NSFont.systemFont(ofSize: 13)
+    /// Weekend day numbers; which weekdays count as weekend follows the user's locale.
+    private static let weekend = NSColor.systemRed
+    private static let weekendWeekdays: Set<Int> = {
+        let cal = Calendar.current
+        let sunday = cal.date(from: DateComponents(year: 2023, month: 1, day: 1))!   // a Sunday
+        return Set((0..<7).filter { cal.isDateInWeekend(cal.date(byAdding: .day, value: $0, to: sunday)!) }.map { $0 + 1 })
+    }()
     private static let monthFormatter: DateFormatter = {
         let f = DateFormatter(); f.setLocalizedDateFormatFromTemplate("LLLL yyyy"); return f
     }()
@@ -181,12 +247,11 @@ private final class CalendarView: NSView {
         NSRect(x: 0, y: 0, width: Self.width, height: gridTop).fill()
         str(Self.monthFormatter.string(from: month), Self.title, .white)
             .draw(at: NSPoint(x: 12, y: (Self.headerH - Self.title.pointSize * 1.25) / 2 + 2))
-        for (k, name) in ["chevron.left", "calendar", "chevron.right"].enumerated() {
-            drawSymbol(name, in: buttonRect(k), color: .white)
-        }
+        for k in 0..<3 { drawButton(k, in: buttonRect(k)) }
         let symbols = cal.veryShortStandaloneWeekdaySymbols
         for c in 0..<7 {
-            let s = str(symbols[(cal.firstWeekday - 1 + c) % 7], Self.small, .white)
+            let wd = (cal.firstWeekday - 1 + c) % 7                 // 0 = Sunday
+            let s = str(symbols[wd], Self.small, Self.weekendWeekdays.contains(wd + 1) ? .white.withAlphaComponent(0.65) : .white)
             s.draw(at: NSPoint(x: CGFloat(c) * colW + (colW - s.size().width) / 2, y: Self.headerH + 2))
         }
 
@@ -203,8 +268,10 @@ private final class CalendarView: NSView {
             } else if isSel {
                 NSColor.quaternaryLabelColor.setFill(); NSBezierPath(roundedRect: pill, xRadius: pill.height / 2, yRadius: pill.height / 2).fill()
             }
+            let inMonth = cal.component(.month, from: d) == thisMonth
             let color: NSColor = isToday ? .white
-                : (cal.component(.month, from: d) == thisMonth ? .labelColor : .tertiaryLabelColor)
+                : cal.isDateInWeekend(d) ? Self.weekend.withAlphaComponent(inMonth ? 1 : 0.4)
+                : (inMonth ? .labelColor : .tertiaryLabelColor)
             let s = str("\(cal.component(.day, from: d))", isToday ? Self.dayBold : Self.day, color)
             let ss = s.size()
             s.draw(at: NSPoint(x: r.midX - ss.width / 2, y: r.minY + 5))
@@ -271,13 +338,28 @@ private final class CalendarView: NSView {
         NSAttributedString(string: s, attributes: [.font: f, .foregroundColor: c])
     }
 
-    private func drawSymbol(_ name: String, in r: NSRect, color: NSColor) {
-        guard let img = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 15, weight: .semibold)
-                .applying(.init(paletteColors: [color]))) else { return }
-        let s = img.size
-        img.draw(in: NSRect(x: r.midX - s.width / 2, y: r.midY - s.height / 2, width: s.width, height: s.height),
-                 from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+    /// Header buttons drawn as paths: SF Symbols would pull the whole symbol catalog
+    /// (~50 MB of CoreSVG data) into memory for three glyphs.
+    private func drawButton(_ k: Int, in r: NSRect) {
+        NSColor.white.set()
+        let c = NSPoint(x: r.midX, y: r.midY)
+        if k == 1 {                                         // today: small calendar page
+            let page = NSRect(x: c.x - 8, y: c.y - 7, width: 16, height: 14)
+            let outline = NSBezierPath(roundedRect: page, xRadius: 2.5, yRadius: 2.5)
+            outline.lineWidth = 1.5; outline.stroke()
+            NSRect(x: page.minX, y: page.minY, width: page.width, height: 4).fill()
+            for i in 0..<6 {
+                NSRect(x: page.minX + 3 + CGFloat(i % 3) * 4, y: page.minY + 6 + CGFloat(i / 3) * 3.5, width: 2, height: 2).fill()
+            }
+            return
+        }
+        let dx: CGFloat = k == 0 ? 3 : -3                   // chevron pointing left / right
+        let p = NSBezierPath()
+        p.move(to: NSPoint(x: c.x + dx, y: c.y - 7))
+        p.line(to: NSPoint(x: c.x - dx, y: c.y))
+        p.line(to: NSPoint(x: c.x + dx, y: c.y + 7))
+        p.lineWidth = 2; p.lineCapStyle = .round; p.lineJoinStyle = .round
+        p.stroke()
     }
 
     // MARK: Input

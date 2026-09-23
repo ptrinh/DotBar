@@ -12,12 +12,20 @@ final class DotBarView: NSView {
     private var dotSize: CGFloat = DotBarView.dotSize
     private var badge: String = ""
     private var badgeColor: NSColor = .systemRed
+    private var spark: [Double] = []
+    private var sparkSlots = 0
+    private var sparkPercent = false
+    private var sparkColor: NSColor = .labelColor
 
     static let dotSize: CGFloat = 6, dotGap: CGFloat = 2, hGap: CGFloat = 4
     static let barDotWidth: CGFloat = 3, badgeFontSize: CGFloat = 8.5, labelGap: CGFloat = 3
 
-    func configure(item: Item, output: ScriptOutput?, dotColors: [NSColor]) {
+    func configure(item: Item, output: ScriptOutput?, dotColors: [NSColor], history: [Double] = []) {
         mode = output?.displayModeOverride ?? item.displayMode
+        sparkSlots = mode == .dotsOnly ? 0 : item.sparkline
+        spark = sparkSlots > 0 ? history : []
+        sparkPercent = output?.text.contains("%") ?? false
+        sparkColor = Self.baseColor(item: item, output: output)
         text = Self.attributed(item: item, output: output, mode: mode)
         dots = mode.showsDots ? dotColors : []
         dotLabels = dots.isEmpty ? [] : item.dots.map { Self.dotLabel(String($0.label.prefix(1)), size: CGFloat(item.dotSize)) }
@@ -59,9 +67,21 @@ final class DotBarView: NSView {
         return maxTextWidth > 0 ? min(w, maxTextWidth) : w
     }
 
+    /// Text ↔ dots gap: tighter when the "text" is only a drawn icon (battery, calendar, symbol),
+    /// whose image already carries its own side bearing.
+    private var dotGapX: CGFloat {
+        let iconOnly = text.length > 0 && !text.string.contains { $0 != "\u{FFFC}" }
+        return iconOnly ? 2 : Self.hGap
+    }
+
+    /// Fixed width for the configured sample count, so the item doesn't grow as history fills.
+    private var sparkWidth: CGFloat { sparkSlots > 0 ? CGFloat(sparkSlots) * Self.sparkStep : 0 }
+    static let sparkStep: CGFloat = 1.5, sparkHeight: CGFloat = 14
+
     override var intrinsicContentSize: NSSize {
         var w = textWidth
-        if !dots.isEmpty { w += dotColumnWidth + (w > 0 ? Self.hGap : 0) }
+        if sparkWidth > 0 { w += sparkWidth + (w > 0 ? Self.hGap : 0) }
+        if !dots.isEmpty { w += dotColumnWidth + (textWidth > 0 ? dotGapX : 0) }
         w += badgeSize.width > 0 ? badgeSize.width * 0.6 : 0
         if mode == .dotsOnly { w = max(w, dotSize + 4) }
         return NSSize(width: w, height: NSStatusBar.system.thickness)
@@ -92,7 +112,8 @@ final class DotBarView: NSView {
         let tw = textWidth
         let dotsW: CGFloat = dots.isEmpty ? 0 : dotColumnWidth
         var x: CGFloat = 0
-        if dotsLeading && !dots.isEmpty { drawDots(atX: x, in: b); x += dotsW + (tw > 0 ? Self.hGap : 0) }
+        if sparkWidth > 0 { drawSpark(in: NSRect(x: 0, y: round((b.height - Self.sparkHeight) / 2), width: sparkWidth, height: Self.sparkHeight)); x += sparkWidth + (tw > 0 || !dots.isEmpty ? Self.hGap : 0) }
+        if dotsLeading && !dots.isEmpty { drawDots(atX: x, in: b); x += dotsW + (tw > 0 ? dotGapX : 0) }
         if maxTextWidth > 0 {
             // Bounded rect + .byTruncatingTail paragraph style -> tail ellipsis.
             let h = ceil(ts.height)
@@ -102,7 +123,7 @@ final class DotBarView: NSView {
             text.draw(at: NSPoint(x: x, y: (b.height - ts.height) / 2))
         }
         x += tw
-        if !dotsLeading && !dots.isEmpty { drawDots(atX: x + (tw > 0 ? Self.hGap : 0), in: b) }
+        if !dotsLeading && !dots.isEmpty { drawDots(atX: x + (tw > 0 ? dotGapX : 0), in: b) }
         drawBadge(in: b)
     }
 
@@ -130,6 +151,28 @@ final class DotBarView: NSView {
             }
             y -= h + Self.dotGap
         }
+    }
+
+    /// Area + line of the recent values, right-aligned so new samples enter at the right.
+    /// Scale starts at 0 for non-negative data (and tops at 100 for percentages).
+    private func drawSpark(in r: NSRect) {
+        sparkColor.withAlphaComponent(0.18).setFill()
+        NSBezierPath(rect: NSRect(x: r.minX, y: r.minY, width: r.width, height: 1)).fill()     // baseline
+        guard spark.count >= 2 else { return }
+        var lo = spark.min()!, hi = spark.max()!
+        if lo >= 0 { lo = 0 }
+        if sparkPercent { hi = max(hi, 100) }
+        if hi - lo < .ulpOfOne { hi = lo + 1 }
+        let x0 = r.maxX - CGFloat(spark.count - 1) * Self.sparkStep
+        let pts = spark.enumerated().map { i, v in
+            NSPoint(x: x0 + CGFloat(i) * Self.sparkStep, y: r.minY + 0.5 + CGFloat((v - lo) / (hi - lo)) * (r.height - 1))
+        }
+        let line = NSBezierPath()
+        line.move(to: pts[0]); pts.dropFirst().forEach { line.line(to: $0) }
+        let area = line.copy() as! NSBezierPath
+        area.line(to: NSPoint(x: pts.last!.x, y: r.minY)); area.line(to: NSPoint(x: pts[0].x, y: r.minY)); area.close()
+        sparkColor.withAlphaComponent(0.3).setFill(); area.fill()
+        sparkColor.setStroke(); line.lineWidth = 1; line.lineJoinStyle = .round; line.stroke()
     }
 
     // MARK: Badge
@@ -171,11 +214,7 @@ final class DotBarView: NSView {
         }
         if runs.isEmpty && !s.isEmpty { runs = [ANSIRun(text: s, color: nil, bold: false)] }
 
-        var color: NSColor = .labelColor
-        // JSON "color" > inline `| color=` param > rule colour. ANSI runs still win per run.
-        if let hex = o?.overrideColor, let c = NSColor(hex: hex) { color = c }
-        else if let c = o?.barParams.color { color = c }
-        else if let c = RuleEngine.color(for: item.textColor, output: o) { color = c }
+        let color = baseColor(item: item, output: o)
 
         let base = font(item.font)
         let result = NSMutableAttributedString()
@@ -200,6 +239,7 @@ final class DotBarView: NSView {
         }
         if let name = symbolName, !name.isEmpty,
            let attachment = calendarAttachment(name, color: color, font: base)
+                ?? batteryAttachment(name, color: color, font: base)
                 ?? symbolAttachment(name, color: color, font: base, scale: stacked ? 1.35 : 1) {
             if result.length > 0 { result.insert(NSAttributedString(string: " "), at: 0) }
             result.insert(attachment, at: 0)
@@ -220,6 +260,13 @@ final class DotBarView: NSView {
                                              : NSFontManager.shared.convert(base, toSize: size)
         let pitch = size
         return (f, pitch, round(f.capHeight + pitch * CGFloat(lines - 1)))
+    }
+
+    /// JSON "color" > inline `| color=` param > rule colour > label colour. ANSI runs still win per run.
+    static func baseColor(item: Item, output o: ScriptOutput?) -> NSColor {
+        if let hex = o?.overrideColor, let c = NSColor(hex: hex) { return c }
+        if let c = o?.barParams.color { return c }
+        return RuleEngine.color(for: item.textColor, output: o) ?? .labelColor
     }
 
     /// Lines of `text` re-set in a smaller font, stacked tight and drawn into one image attachment.
@@ -307,6 +354,94 @@ final class DotBarView: NSView {
         att.image = img
         att.bounds = NSRect(x: 0, y: round((base.capHeight - h) / 2), width: size.width, height: size.height)
         return NSAttributedString(attachment: att)
+    }
+
+    /// `symbol: "battery:<percent>[:charging|:plugged]"`: the macOS 27 battery turned upright: a slim
+    /// solid pill with a half-disc cap on top, level filled from the bottom over a grey track.
+    /// Charging: bolt; on power, not charging: plug lying across. Glyphs are drawn in the ink
+    /// colour, spill over the outline, and are ringed by a cut-out gap. Yellow in Low Power Mode (`:lowpower`), else red at 20 % or less on battery.
+    /// Every edge is snapped to device pixels.
+    private static func batteryAttachment(_ name: String, color: NSColor, font base: NSFont) -> NSAttributedString? {
+        guard name.hasPrefix("battery:") else { return nil }
+        let parts = name.dropFirst("battery:".count).split(separator: ":").map(String.init)
+        guard let pct = parts.first.flatMap(Double.init) else { return nil }
+        let level = min(max(pct / 100, 0), 1)
+        let charging = parts.contains("charging"), plugged = parts.contains("plugged")
+        let lowPower = parts.contains("lowpower")
+        let h = round(base.pointSize * 1.4), w = round(h * 0.5)
+        // Side margin only when a glyph is drawn: it may spill over the outline.
+        let mx: CGFloat = charging || plugged ? 1.5 : 0
+        let size = NSSize(width: w + 2 * mx, height: h)
+        let img = NSImage(size: size, flipped: false) { _ in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            ctx.translateBy(x: mx, y: 0)
+            let sc = max(1, ctx.userSpaceToDeviceSpaceTransform.a)
+            func px(_ v: CGFloat) -> CGFloat { (v * sc).rounded() / sc }
+            let capH = px(1.5), gap = 1 / sc
+            let body = NSRect(x: 0, y: 0, width: w, height: px(h - capH - gap))
+            let r = px(w * 0.3)
+            let pill = NSBezierPath(roundedRect: body, xRadius: r, yRadius: r)
+            let track = color.withAlphaComponent(0.4)
+            track.setFill(); pill.fill()
+            let capW = px(w * 0.46)                                  // half disc
+            let cap = NSBezierPath()
+            cap.appendArc(withCenter: NSPoint(x: w / 2, y: body.maxY + gap), radius: capW / 2, startAngle: 0, endAngle: 180)
+            cap.close()
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(rect: NSRect(x: 0, y: body.maxY + gap, width: w, height: capH)).addClip()
+            cap.fill()
+            NSGraphicsContext.restoreGraphicsState()
+            NSGraphicsContext.saveGraphicsState()
+            pill.addClip()
+            (lowPower ? NSColor.systemYellow
+                : pct <= 20 && !charging && !plugged ? NSColor.systemRed : color).setFill()
+            NSRect(x: 0, y: 0, width: w, height: px(body.height * level)).fill()
+            NSGraphicsContext.restoreGraphicsState()
+            guard charging || plugged else { return true }
+            // Glyph in the ink colour, larger than the body, separated from it by a cut-out gap
+            // (the macOS 26 look) so it reads over the fill and past the outline alike.
+            let glyph: NSBezierPath
+            if charging {
+                let gh = px(body.height * 0.82), gw = px(gh * 0.6)
+                glyph = boltPath(in: NSRect(x: px((w - gw) / 2), y: px(body.midY - gh / 2), width: gw, height: gh))
+            } else {
+                let gw = w + 2 * mx - 1, gh = px(gw * 0.62)
+                glyph = plugPath(in: NSRect(x: 0.5 - mx, y: px(body.midY - gh / 2), width: gw, height: gh))
+            }
+            ctx.saveGState()
+            ctx.setBlendMode(.clear)
+            glyph.lineWidth = 1.5; glyph.lineJoinStyle = .round; glyph.stroke()
+            ctx.restoreGState()
+            color.setFill(); glyph.fill()
+            return true
+        }
+        let att = NSTextAttachment()
+        att.image = img
+        att.bounds = NSRect(x: 0, y: round((base.capHeight - h) / 2), width: size.width, height: h)
+        return NSAttributedString(attachment: att)
+    }
+
+    private static func boltPath(in r: NSRect) -> NSBezierPath {
+        polygon([(0.66, 1), (0.06, 0.42), (0.46, 0.42), (0.34, 0), (0.94, 0.58), (0.54, 0.58)], in: r)
+    }
+
+    /// Plug lying across (cord left, prongs right) as one outline, so the cut-out stays clean.
+    private static func plugPath(in r: NSRect) -> NSBezierPath {
+        let upright: [(CGFloat, CGFloat)] = [(0.38, 0), (0.62, 0), (0.62, 0.28), (0.82, 0.36), (0.96, 0.52), (0.96, 0.68), (0.8, 0.68),
+                 (0.8, 1), (0.62, 1), (0.62, 0.68), (0.38, 0.68), (0.38, 1), (0.2, 1), (0.2, 0.68),
+                 (0.04, 0.68), (0.04, 0.52), (0.18, 0.36), (0.38, 0.28)]
+        return polygon(upright.map { ($0.1, $0.0) }, in: r)
+    }
+
+    private static func polygon(_ pts: [(CGFloat, CGFloat)], in r: NSRect) -> NSBezierPath {
+        let p = NSBezierPath()
+        for (i, q) in pts.enumerated() {
+            let pt = NSPoint(x: r.minX + q.0 * r.width, y: r.minY + q.1 * r.height)
+            i == 0 ? p.move(to: pt) : p.line(to: pt)
+        }
+        p.close()
+        p.lineJoinStyle = .round
+        return p
     }
 
     /// Draws `s` with its ink (glyph bounds, not font metrics) centred in `rect`, pixel-aligned.

@@ -92,6 +92,10 @@ struct ItemEditorView: View {
                         Text("pt").foregroundStyle(.secondary)
                     }
                 }
+                Picker("Sparkline", selection: $item.sparkline) {
+                    Text("Off").tag(0)
+                    ForEach([10, 20, 30, 60], id: \.self) { Text("Last \($0) values").tag($0) }
+                }
                 Picker("Show", selection: $item.displayMode) {
                     ForEach(DisplayMode.allCases) { Text($0.label).tag($0) }
                 }.pickerStyle(.segmented)

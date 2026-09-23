@@ -18,7 +18,7 @@ struct Item: Identifiable, Codable, Hashable {
     var maxWidth: Double = 0
     var notify: NotifySpec = .off
     var hotkey: Hotkey? = nil
-    /// Hide the status item entirely while the output text is empty and no dots are overridden.
+    /// Hide the status item entirely while the output has no text, no dot override and no symbol.
     var hideWhenEmpty: Bool = false
     /// Action for ⌥ + left click.
     var altAction: ClickAction = .menu
@@ -35,6 +35,9 @@ struct Item: Identifiable, Codable, Hashable {
     /// Horizontal padding inside the status item, in points.
     var paddingLeft: Double = 2
     var paddingRight: Double = 2
+    /// Sparkline of the last N values of the item's number, drawn before the text. 0 = off.
+    /// History lives in memory only.
+    var sparkline: Int = 0
 
     /// 0 for static text and for streams — a stream pushes updates itself, so it has no timer.
     var refreshSeconds: Int {
@@ -54,7 +57,7 @@ struct Item: Identifiable, Codable, Hashable {
          altAction: ClickAction = .menu, middleAction: ClickAction = .menu,
          displayMode: DisplayMode = .textAndDots,
          dotStyle: DotStyle = .circle, dotSize: Double = 6,
-         showInBar: Bool = true, paddingLeft: Double = 2, paddingRight: Double = 2) {
+         showInBar: Bool = true, paddingLeft: Double = 2, paddingRight: Double = 2, sparkline: Int = 0) {
         self.id = id; self.name = name; self.enabled = enabled; self.source = source
         self.font = font; self.textColor = textColor; self.dots = dots
         self.dotsPosition = dotsPosition; self.action = action
@@ -65,13 +68,14 @@ struct Item: Identifiable, Codable, Hashable {
         self.displayMode = displayMode
         self.dotStyle = dotStyle; self.dotSize = dotSize
         self.showInBar = showInBar; self.paddingLeft = paddingLeft; self.paddingRight = paddingRight
+        self.sparkline = sparkline
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, enabled, source, font, textColor, dots, dotsPosition, action, symbol, maxWidth, notify, hotkey
         case hideWhenEmpty
         case altAction, middleAction, displayMode, dotStyle, dotSize
-        case showInBar, paddingLeft, paddingRight
+        case showInBar, paddingLeft, paddingRight, sparkline
     }
 
     /// Everything is optional with a default so older items.json files keep loading.
@@ -99,6 +103,7 @@ struct Item: Identifiable, Codable, Hashable {
         showInBar = try c.decodeIfPresent(Bool.self, forKey: .showInBar) ?? true
         paddingLeft = try c.decodeIfPresent(Double.self, forKey: .paddingLeft) ?? 2
         paddingRight = try c.decodeIfPresent(Double.self, forKey: .paddingRight) ?? 2
+        sparkline = try c.decodeIfPresent(Int.self, forKey: .sparkline) ?? 0
     }
 }
 

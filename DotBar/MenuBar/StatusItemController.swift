@@ -39,7 +39,7 @@ final class StatusItemController: NSObject {
         guard let item = state.binding(for: itemID) else { return }
         let out = state.output(for: item)
         let colors = state.resolvedDotColors(for: item)
-        view.configure(item: item, output: out, dotColors: colors)
+        view.configure(item: item, output: out, dotColors: colors, history: state.history(for: item))
         let padL = CGFloat(max(0, item.paddingLeft)), padR = CGFloat(max(0, item.paddingRight))
         leading.constant = padL; trailing.constant = -padR
         statusItem.length = view.intrinsicContentSize.width + padL + padR

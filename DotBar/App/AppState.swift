@@ -8,6 +8,8 @@ final class AppState: ObservableObject {
     /// Script results. Kept OFF AppState's publisher so the Preferences form does not re-render
     /// on every script tick; only views that show live output observe `live`.
     private(set) var outputs: [UUID: ScriptOutput] = [:] { didSet { live.objectWillChange.send() } }
+    /// Sparkline samples per item, in memory only.
+    private var history: [UUID: [Double]] = [:]
     private(set) var dotOutputs: [UUID: ScriptOutput] = [:] { didSet { live.objectWillChange.send() } }
     let live = LiveOutputs()
     final class LiveOutputs: ObservableObject {}
@@ -267,6 +269,14 @@ final class AppState: ObservableObject {
 
     private func setOutput(_ out: ScriptOutput, for id: UUID) {
         outputs[id] = out
+        if let n = binding(for: id)?.sparkline, n > 0, let v = out.number {
+            var h = history[id] ?? []
+            h.append(v)
+            if h.count > n { h.removeFirst(h.count - n) }
+            history[id] = h
+        } else if history[id] != nil, (binding(for: id)?.sparkline ?? 0) == 0 {
+            history[id] = nil
+        }
         refreshBarItem(id)
         applyVisibility(id)
         if refreshOverrides[id] != out.refreshOverride {
@@ -290,7 +300,9 @@ final class AppState: ObservableObject {
         let out = outputs[item.id]
         let empty = (out?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasDotsOverride = !(out?.overrideDots ?? []).isEmpty
-        return empty && !hasDotsOverride
+        // A symbol alone (e.g. `"symbol":"battery:80"` with empty text) still draws something.
+        let hasSymbol = !(out?.symbol ?? out?.barParams.sfimage ?? "").isEmpty
+        return empty && !hasDotsOverride && !hasSymbol
     }
 
     /// Re-render one item on the bar, whichever controller owns it.
@@ -394,6 +406,8 @@ final class AppState: ObservableObject {
     }
 
     func output(for item: Item) -> ScriptOutput? { outputs[item.id] }
+    /// Recent numbers for the item's sparkline (empty when off).
+    func history(for item: Item) -> [Double] { item.sparkline > 0 ? Array((history[item.id] ?? []).suffix(item.sparkline)) : [] }
     func output(for dot: Dot, in item: Item) -> ScriptOutput? {
         switch dot.source {
         case .mainValue: outputs[item.id]

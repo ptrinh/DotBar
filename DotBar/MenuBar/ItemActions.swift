@@ -42,7 +42,13 @@ final class ItemActions: NSObject {
         switch action {
         case .menu: showMenu()
         case .copy: copyOutput()
-        case .script(let cmd): Task.detached(priority: .utility) { _ = await ScriptRunner.run(cmd) }
+        case .script(let cmd):
+            // Refresh afterwards: a click script usually changes what the item shows (toggles, timers).
+            Task { [weak self] in
+                _ = await ScriptRunner.run(cmd)
+                guard let self, let item = self.state.binding(for: self.itemID) else { return }
+                self.state.refresh(item)
+            }
         case .openURL(let s): if let u = URL(string: s) { NSWorkspace.shared.open(u) }
         case .calendar: if let b = statusItem.button { CalendarPopover.toggle(relativeTo: b) }
         }

@@ -27,7 +27,12 @@ func run() {
 
     // MARK: Items
 
-    var btc = Recipes.all().first { $0.name == "BTC 3 digits + CPU/RAM dots" }!
+    // Screenshot item: BTC text with the CPU/RAM dots of the "Battery + CPU/RAM dots" recipe.
+    var btc = Recipes.all().first { $0.name == "BTC 3 digits" }!
+    let loadDots = Recipes.all().first { $0.name == "Battery + CPU/RAM dots" }!
+    btc.name = "BTC 3 digits + CPU/RAM dots"
+    btc.dots = loadDots.dots
+    btc.dotSize = loadDots.dotSize
     // Deterministic dot inputs (the real recipe shells out to top / vm_stat).
     btc.dots[0].source = .script(command: "echo 86", refreshSeconds: 10)
     btc.dots[1].source = .script(command: "echo 91", refreshSeconds: 15)

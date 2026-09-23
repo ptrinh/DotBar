@@ -8,29 +8,40 @@ enum Recipes {
     /// Mac App Store build runs inside the App Sandbox: `top`, `ps`, `ping`, `ipconfig getifaddr`, `git` are denied there.
     static let isSandboxed = ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
 
-    /// CPU % : `top` outside the sandbox, 1-minute load average / core count inside it.
+    /// CPU % : `iostat` over one second outside the sandbox (≈0.01 s CPU per run; `top -l 1`
+    /// cost ≈0.75 s, run every few seconds by several recipes), 1-minute load average / core
+    /// count inside it.
     static var cpuPercentCommand: String {
         isSandboxed
             ? #"awk -v l="$(sysctl -n vm.loadavg | awk '{print $2}')" -v n="$(sysctl -n hw.ncpu)" 'BEGIN{p=l/n*100; if(p>100)p=100; printf "%.0f", p}'"#
-            : #"top -l 1 -n 0 | awk '/CPU usage/ {printf "%.0f", $3+$5}'"#
+            : #"iostat -c 2 -w 1 | tail -1 | awk '{printf "%.0f", 100 - $(NF-3)}'"#
+    }
+    /// Menu lines listing the top 5 processes by CPU (`pcpu`) or memory (`rss`); `ps` is denied in the sandbox.
+    static func topProcesses(byMemory: Bool) -> String {
+        guard !isSandboxed else { return "" }
+        return byMemory
+            ? #"; echo "Top memory | disabled=true"; ps -Aceo rss=,comm= -m | head -5 | awk '{m=$1; $1=""; printf "%.0f MB  %s\n", m/1024, substr($0,2)}'"#
+            : #"; echo "Top CPU | disabled=true"; ps -Aceo pcpu=,comm= -r | head -5 | awk '{p=$1; $1=""; printf "%.1f%%  %s\n", p, substr($0,2)}'"#
     }
     static var localIPCommand: String {
         isSandboxed ? #"ifconfig en0 | awk '/inet /{print $2}'"# : #"ipconfig getifaddr en0"#
     }
 
     /// Recipes whose commands the App Sandbox denies (ping raw sockets, git via xcrun, ipconfig SSID).
-    private static let sandboxUnavailable: Set<String> = ["Ping 1.1.1.1", "Ping stream", "Git Branch", "Wi-Fi SSID",
+    private static let sandboxUnavailable: Set<String> = ["Now Playing", "Ping 1.1.1.1", "Ping stream", "Git Branch", "Wi-Fi SSID",
                                                           "Network Throughput", "VPN", "Time Machine", "Displays", "Bluetooth Battery"]
 
     static func all() -> [Item] {
         [// System
-         cpuLoad, memoryUsed, swapUsed, loadAverage, battery, diskFree, uptime, caffeinate, darkMode, displays, bluetoothBattery, timeMachine,
+         cpuUsage, cpuLoad, memoryUsed, swapUsed, loadAverage, battery, batteryWithLoadDots, diskFree, uptime, caffeinate, darkMode, displays, bluetoothBattery, timeMachine,
          // Network
          publicIP, localIP, wifiSSID, vpn, networkThroughput, ping,
          // Finance
-         btcPrice, btc3Digits, btcWithLoadDots, ethPrice, stockQuote, exchangeRates, goldPrice,
+         btcPrice, btc3Digits, ethPrice, stockQuote, exchangeRates, goldPrice,
          // Weather & time
-         weather, airQuality, clock, calendarIcon, worldClock, countdown,
+         weather, airQuality, clock, calendarIcon, worldClock, countdown, pomodoro,
+         // Media
+         nowPlaying,
          // Dev & streaming
          gitBranch, pingStream, logTail]
             .filter { !isSandboxed || !sandboxUnavailable.contains($0.name) }
@@ -48,13 +59,33 @@ enum Recipes {
 
     private static var memoryUsed: Item {
         let cmd = #"vm_stat | awk '/Pages free/{f=$3} /Pages active/{a=$3} /Pages inactive/{i=$3} /Pages speculative/{s=$3} /Pages wired down/{w=$4} /Pages occupied by compressor/{c=$5} END{gsub(/[^0-9]/,"",f);gsub(/[^0-9]/,"",a);gsub(/[^0-9]/,"",i);gsub(/[^0-9]/,"",s);gsub(/[^0-9]/,"",w);gsub(/[^0-9]/,"",c); t=f+a+i+s+w+c; if (t>0) printf "%.0f%%", (a+w+c)*100/t}'"#
-        var i = Item(name: "Memory Used", source: .script(command: cmd, refreshSeconds: 15))
+        var i = Item(name: "Memory Used", source: .script(command: cmd + "; echo" + topProcesses(byMemory: true), refreshSeconds: 15))
         i.dots = [dot(ranges: [(nil, 70, green), (70, 88, orange), (88, nil, red)])]
+        i.sparkline = 30
+        return i
+    }
+
+    /// Upright battery icon only (saves width); % and state are in the menu. Hidden without a battery.
+    private static var batteryIcon: Item {   // base of batteryWithLoadDots
+        var i = Item(name: "Battery Icon",
+                     source: .script(command: #"lp=$(pmset -g | awk '/lowpowermode/{print $2}'); pmset -g batt | awk -F'\t' -v lp="$lp" '/AC Power/{ac=1} /InternalBattery/{split($2,a,"; "); p=a[1]+0; s=a[2]; t=a[3]; sub(/ *present.*/,"",t); c=(s=="charging"||s=="finishing charge")?":charging":(ac?":plugged":""); if (lp==1) c=c ":lowpower"; m="\"" p "% — " s "\""; if (t!="" && t !~ /^0:00/ && t !~ /no estimate/) m=m ",\"" t "\""; if (lp==1) m=m ",\"Low Power Mode on\""; printf "{\"text\":\"\",\"symbol\":\"battery:%d%s\",\"menu\":[%s]}\n", p, c, m}'"#, refreshSeconds: 60))
+        i.hideWhenEmpty = true
+        i.paddingLeft = 0; i.paddingRight = 0
+        return i
+    }
+
+    /// CPU % with a 30-sample sparkline; the menu lists the top processes.
+    private static var cpuUsage: Item {
+        var i = Item(name: "CPU Usage",
+                     source: .script(command: #"echo "$("# + cpuPercentCommand + #")%""# + topProcesses(byMemory: false),
+                                     refreshSeconds: 5))
+        i.dots = [dot(ranges: [(nil, 50, green), (50, 80, orange), (80, nil, red)])]
+        i.sparkline = 30
         return i
     }
 
     private static var battery: Item {
-        var i = Item(name: "Battery",
+        var i = Item(name: "Battery Text",
                      source: .script(command: #"pmset -g batt | grep -Eo '[0-9]+%' | head -1"#,
                                      refreshSeconds: 60))
         i.dots = [dot(ranges: [(nil, 20, red), (20, 50, orange), (50, nil, green)])]
@@ -92,13 +123,14 @@ enum Recipes {
     }
 
     /// First 3 digits of the BTC price as text; dot 1 fades transparent -> red with CPU %, dot 2 transparent -> yellow with RAM %.
-    private static var btcWithLoadDots: Item {
-        let btc = #"curl -s --max-time 8 https://api.coinbase.com/v2/prices/BTC-USD/spot | sed -E 's/.*"amount":"([0-9]+)[."].*/\1/' | cut -c1-3"#
-        let cpu = cpuPercentCommand
+    /// Battery icon with CPU (C) and RAM (M) dots that fade in above 40 % / 50 %.
+    static var batteryWithLoadDots: Item {
         let ram = #"vm_stat | awk '/Pages free/{f=$3} /Pages active/{a=$3} /Pages inactive/{i=$3} /Pages speculative/{s=$3} /Pages wired down/{w=$4} /Pages occupied by compressor/{c=$5} END{gsub(/[^0-9]/,"",f);gsub(/[^0-9]/,"",a);gsub(/[^0-9]/,"",i);gsub(/[^0-9]/,"",s);gsub(/[^0-9]/,"",w);gsub(/[^0-9]/,"",c); t=f+a+i+s+w+c; if (t>0) printf "%.0f", (a+w+c)*100/t}'"#
-        var i = Item(name: "BTC 3 digits + CPU/RAM dots", source: .script(command: btc, refreshSeconds: 60))
+        var i = batteryIcon
+        i.name = "Battery + CPU/RAM dots"
+        i.hideWhenEmpty = false          // no battery: the icon is simply absent, the dots stay
         i.dots = [
-            Dot(source: .script(command: cpu, refreshSeconds: 10),
+            Dot(source: .script(command: cpuPercentCommand, refreshSeconds: 10),
                 color: .gradient(min: 40, max: 100, from: "#FF453A00", to: "#FF453A"), label: "C"),
             Dot(source: .script(command: ram, refreshSeconds: 15),
                 color: .gradient(min: 50, max: 100, from: "#FFD60A00", to: "#FFD60A"), label: "M"),
@@ -278,10 +310,11 @@ enum Recipes {
 
     /// Single calendar page: weekday in the header, day number below.
     /// C= header colour: red, blue, any name or #hex; empty = subtle monochrome.
-    private static var calendarIcon: Item {
+    static var calendarIcon: Item {
         var i = Item(name: "Calendar Icon",
                      source: .script(command: #"C=black; date +'{"text":"","symbol":"calendar:%-d:%a:'"$C"'"}'"#, refreshSeconds: 60))
         i.action = .calendar
+        i.paddingLeft = 0; i.paddingRight = 0
         return i
     }
 
@@ -291,6 +324,29 @@ enum Recipes {
     }
 
     /// Days left until a date. Edit the date.
+    /// 25-minute focus timer: click to start / stop. State is one file holding the end time.
+    private static var pomodoro: Item {
+        let f = #"f="$HOME/.dotbar-pomodoro"; "#
+        var i = Item(name: "Pomodoro",
+                     source: .script(command: f + #"if [ -f "$f" ]; then r=$(( $(cat "$f") - $(date +%s) )); if [ $r -gt 0 ]; then echo "🍅 $(( (r + 59) / 60 ))m"; else echo "🍅 Break"; fi; else echo "🍅"; fi"#,
+                                     refreshSeconds: 15))
+        i.action = .script(command: f + #"if [ -f "$f" ]; then rm "$f"; else echo $(( $(date +%s) + 25 * 60 )) > "$f"; fi"#)
+        return i
+    }
+
+    /// Track playing in Music or Spotify; hidden when nothing plays. Click = play / pause.
+    /// Never launches either app (`is running` guard). Needs Automation permission once.
+    private static var nowPlaying: Item {
+        let track = #"if player state is playing then return "♫ " & name of current track & " — " & artist of current track"#
+        var i = Item(name: "Now Playing",
+                     source: .script(command: #"osascript -e 'if application "Music" is running then tell application "Music" to "# + track + #"' -e 'if application "Spotify" is running then tell application "Spotify" to "# + track + #"' -e 'return ""'"#,
+                                     refreshSeconds: 5))
+        i.action = .script(command: #"osascript -e 'if application "Spotify" is running then tell application "Spotify" to playpause' -e 'if application "Music" is running then tell application "Music" to playpause'"#)
+        i.hideWhenEmpty = true
+        i.maxWidth = 200
+        return i
+    }
+
     private static var countdown: Item {
         var i = Item(name: "Countdown",
                      source: .script(command: #"d=$(date -j -f "%Y-%m-%d" "2026-12-25" +%s); echo "$(( (d - $(date +%s)) / 86400 ))d""#,

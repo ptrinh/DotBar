@@ -37,6 +37,7 @@ A `text` containing `\n` is drawn as small lines stacked to fit the bar, e.g. `{
 |---|---|
 | `calendar:<day>` | day number under a faint strip, sized to two stacked lines |
 | `calendar:<day>:<label>[:<color>]` | `label` (e.g. weekday) in the strip, day number below; `color` (`black`, `red`, `blue`, `#hex`, `light,dark` pair…) fills the strip, empty = subtle monochrome |
+| `battery:<percent>[:charging\|:plugged][:lowpower]` | the macOS 27 battery turned upright: slim solid pill, level over a grey track; red at ≤ 20 % on battery, bolt while charging, plug when on power but not charging; add `:lowpower` for the yellow Low Power Mode fill |
 
 For the number-range rules, DotBar parses the **first number** in the output — so `"14%"`,
 `"15.7 ms"` and `"$80574"` all work directly.
@@ -74,9 +75,22 @@ codes stripped).
 **Submenus:** a menu line starting with `--` nests under the previous line; `----` nests one level
 deeper, and so on. A line of `---` is a separator; `-----` is a separator inside a submenu.
 
+### Sparkline
+
+**Display → Sparkline** keeps the last 10–60 values of the item's first number (in memory
+only) and draws them as a small area chart before the text. The scale starts at 0 for
+non-negative values and tops out at 100 when the text contains `%`.
+
 ---
 
 ## Recipes
+
+### CPU Usage % — every 5s (sparkline)
+Dots: green < 50, orange 50–80, red > 80. The menu lists the top 5 processes by CPU (Homebrew build).
+```sh
+echo "$(iostat -c 2 -w 1 | tail -1 | awk '{printf "%.0f", 100 - $(NF-3)}')%"
+echo "Top CPU | disabled=true"; ps -Aceo pcpu=,comm= -r | head -5 | awk '{p=$1; $1=""; printf "%.1f%%  %s\n", p, substr($0,2)}'
+```
 
 ### CPU Load — every 10s
 Dots: green < 2, orange 2–6, red > 6.
@@ -84,13 +98,15 @@ Dots: green < 2, orange 2–6, red > 6.
 uptime | sed -E 's/.*load averages?: ([0-9.,]+).*/\1/'
 ```
 
-### Memory Used % — every 15s
+### Memory Used % — every 15s (sparkline)
 Active + wired + compressed as a share of all pages. Dots: green < 70, orange 70–88, red > 88.
+The menu lists the top 5 processes by memory (Homebrew build): append
+`; echo; echo "Top memory | disabled=true"; ps -Aceo rss=,comm= -m | head -5 | awk '{m=$1; $1=""; printf "%.0f MB  %s\n", m/1024, substr($0,2)}'`.
 ```sh
 vm_stat | awk '/Pages free/{f=$3} /Pages active/{a=$3} /Pages inactive/{i=$3} /Pages speculative/{s=$3} /Pages wired down/{w=$4} /Pages occupied by compressor/{c=$5} END{gsub(/[^0-9]/,"",f);gsub(/[^0-9]/,"",a);gsub(/[^0-9]/,"",i);gsub(/[^0-9]/,"",s);gsub(/[^0-9]/,"",w);gsub(/[^0-9]/,"",c); t=f+a+i+s+w+c; if (t>0) printf "%.0f%%", (a+w+c)*100/t}'
 ```
 
-### Battery % — every 60s
+### Battery Text — every 60s
 Dots: red < 20, orange 20–50, green > 50.
 ```sh
 pmset -g batt | grep -Eo '[0-9]+%' | head -1
@@ -121,11 +137,16 @@ curl -s --max-time 8 https://api.coinbase.com/v2/prices/BTC-USD/spot | sed -E 's
 ```
 Swap `BTC-USD` for `ETH-USD`, `SOL-USD`, … for other pairs.
 
-### BTC 3 digits + CPU/RAM dots
-Text = first 3 digits of the BTC price. Dot 1 fades from transparent (≤40 %) to red (100 %) with CPU, dot 2 from transparent (≤50 %) to yellow with RAM. Uses the **Gradient** color mode: pick "Gradient", set the value range (40 → 100 / 50 → 100) and the two end colors; alpha is interpolated, so a `#RRGGBB00` start fades in.
+### Battery + CPU/RAM dots — every 60s (default on first launch)
+Upright battery icon only, to save width; % and charge state are in the menu. On a Mac without
+a battery the command prints nothing, so only the two dots show.
+```sh
+lp=$(pmset -g | awk '/lowpowermode/{print $2}'); pmset -g batt | awk -F'\t' -v lp="$lp" '/AC Power/{ac=1} /InternalBattery/{split($2,a,"; "); p=a[1]+0; s=a[2]; t=a[3]; sub(/ *present.*/,"",t); c=(s=="charging"||s=="finishing charge")?":charging":(ac?":plugged":""); if (lp==1) c=c ":lowpower"; m="\"" p "% — " s "\""; if (t!="" && t !~ /^0:00/ && t !~ /no estimate/) m=m ",\"" t "\""; if (lp==1) m=m ",\"Low Power Mode on\""; printf "{\"text\":\"\",\"symbol\":\"battery:%d%s\",\"menu\":[%s]}\n", p, c, m}'
+```
+Dot 1 fades from transparent (≤40 %) to red (100 %) with CPU, dot 2 from transparent (≤50 %) to yellow with RAM. Uses the **Gradient** color mode: pick "Gradient", set the value range (40 → 100 / 50 → 100) and the two end colors; alpha is interpolated, so a `#RRGGBB00` start fades in.
 ```sh
 # dot 1 (own script, every 10s)
-top -l 1 -n 0 | awk '/CPU usage/ {printf "%.0f", $3+$5}'
+iostat -c 2 -w 1 | tail -1 | awk '{printf "%.0f", 100 - $(NF-3)}'
 # dot 2 (own script, every 15s): see "Memory used %" above, without the trailing %
 ```
 
@@ -164,7 +185,7 @@ Any `strftime` format works; see `man strftime`.
 date +"%a %d %H:%M"
 ```
 
-### Calendar Icon — every 60s
+### Calendar Icon — every 60s (default on first launch)
 Weekday on top, day number below. Change `C=` for the strip colour. Left click is set to
 **Show calendar**: a month popover with the selected day's events (asks for Calendar access once).
 ```sh
@@ -261,6 +282,24 @@ TZ="America/New_York" date +"NY %H:%M"
 ### Countdown — every 3600s
 ```sh
 d=$(date -j -f "%Y-%m-%d" "2026-12-25" +%s); echo "$(( (d - $(date +%s)) / 86400 ))d"
+```
+
+### Pomodoro — every 15s
+Click to start a 25-minute timer, click again to stop. The end time lives in `~/.dotbar-pomodoro`.
+```sh
+f="$HOME/.dotbar-pomodoro"; if [ -f "$f" ]; then r=$(( $(cat "$f") - $(date +%s) )); if [ $r -gt 0 ]; then echo "🍅 $(( (r + 59) / 60 ))m"; else echo "🍅 Break"; fi; else echo "🍅"; fi
+```
+Left click → Run script:
+```sh
+f="$HOME/.dotbar-pomodoro"; if [ -f "$f" ]; then rm "$f"; else echo $(( $(date +%s) + 25 * 60 )) > "$f"; fi
+```
+A click script refreshes its item when it finishes, so the bar updates right away.
+
+### Now Playing — every 5s (Homebrew build)
+Track in Music or Spotify; hidden when nothing plays, never launches either app. Click = play / pause.
+Asks once for Automation permission.
+```sh
+osascript -e 'if application "Music" is running then tell application "Music" to if player state is playing then return "♫ " & name of current track & " — " & artist of current track' -e 'if application "Spotify" is running then tell application "Spotify" to if player state is playing then return "♫ " & name of current track & " — " & artist of current track' -e 'return ""'
 ```
 
 ## Recipes that need a third-party CLI (not built in)
