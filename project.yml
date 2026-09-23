@@ -42,7 +42,7 @@ targets:
     platform: macOS
     sources:
       - path: DotBar
-        excludes: ["Resources/Info.plist", "Resources/DotBar-AppStore.entitlements"]
+        excludes: ["Resources/Info.plist", "Resources/DotBar-AppStore.entitlements", "Resources/DotBar-DevID.entitlements"]
       - path: DotBar/Resources/AppIcon.icns
         buildPhase: resources
     info:
@@ -63,6 +63,7 @@ targets:
         # Safe: items.json is written atomically on every model change, so there is
         # nothing to flush at shutdown. Lets the system skip us at logout/restart.
         NSSupportsSuddenTermination: true
+        NSCalendarsFullAccessUsageDescription: "DotBar shows your events in the calendar popover."
         CFBundleURLTypes:
           - CFBundleURLName: DotBar URL
             CFBundleURLSchemes: [dotbar]

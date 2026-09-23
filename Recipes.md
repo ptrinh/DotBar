@@ -165,7 +165,8 @@ date +"%a %d %H:%M"
 ```
 
 ### Calendar Icon — every 60s
-Weekday on top, day number below. Change `C=` for the strip colour.
+Weekday on top, day number below. Change `C=` for the strip colour. Left click is set to
+**Show calendar**: a month popover with the selected day's events (asks for Calendar access once).
 ```sh
 C=black; date +'{"text":"","symbol":"calendar:%-d:%a:'"$C"'"}'
 ```

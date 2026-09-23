@@ -241,6 +241,7 @@ struct ClickActionPicker: View {
             Text("Copy text").tag(1)
             Text("Run script").tag(2)
             Text("Open URL").tag(3)
+            Text("Show calendar").tag(4)
         }
         switch action {
         case .script(let cmd):
@@ -259,12 +260,13 @@ struct ClickActionPicker: View {
 
     private var kind: Binding<Int> {
         Binding(get: {
-            switch action { case .menu: 0; case .copy: 1; case .script: 2; case .openURL: 3 }
+            switch action { case .menu: 0; case .copy: 1; case .script: 2; case .openURL: 3; case .calendar: 4 }
         }, set: { v in
             switch v {
             case 1: action = .copy
             case 2: action = .script(command: "")
             case 3: action = .openURL(url: "https://")
+            case 4: action = .calendar
             default: action = .menu
             }
         })

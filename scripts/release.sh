@@ -30,10 +30,12 @@ rm -rf "$OUT" build/Build/Products/Release; mkdir -p "$OUT"
 xcodebuild -project DotBar.xcodeproj -scheme DotBar -configuration Release -derivedDataPath build \
   CODE_SIGN_IDENTITY="$SIGN_ID" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM_ID" \
   ENABLE_HARDENED_RUNTIME=YES OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" \
+  CODE_SIGN_ENTITLEMENTS="DotBar/Resources/DotBar-DevID.entitlements" \
   build 2>&1 | grep -E "error:|BUILD" || true
 cp -R build/Build/Products/Release/DotBar.app "$APP"
 codesign --verify --deep --strict "$APP"
 codesign -dv "$APP" 2>&1 | grep -E "Authority=Developer ID|flags=.*runtime" | head -2
+codesign -d --entitlements :- "$APP" 2>/dev/null | grep -q personal-information.calendars || { echo "missing calendars entitlement"; exit 1; }
 
 if [[ "${NOTARIZE:-1}" == "1" ]]; then
   echo "==> Notarizing"

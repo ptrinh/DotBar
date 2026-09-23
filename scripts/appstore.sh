@@ -51,4 +51,4 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$OUT/Expo
   2>&1 | grep -vE "^\s*$" | tail -8
 ls -la "$OUT"/*.pkg 2>/dev/null || true
 APP="$ARCHIVE/Products/Applications/DotBar.app"
-echo "==> Entitlements in archive:"; codesign -d --entitlements :- "$APP" 2>/dev/null | grep -E "app-sandbox|network|files" | sed 's/^\s*//'
+echo "==> Entitlements in archive:"; codesign -d --entitlements :- "$APP" 2>/dev/null | grep -E "app-sandbox|network|files|calendars" | sed 's/^\s*//'

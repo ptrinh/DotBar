@@ -177,6 +177,8 @@ enum ClickAction: Codable, Hashable {
     case copy
     case script(command: String)
     case openURL(url: String)
+    /// Month calendar popover with the day's events (EventKit).
+    case calendar
 }
 
 // MARK: - Dot

@@ -41,6 +41,8 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>DotBar shows your events in the calendar popover.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Phil Trinh. All rights reserved.</string>
 	<key>NSPrincipalClass</key>

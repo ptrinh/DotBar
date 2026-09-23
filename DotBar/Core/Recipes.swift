@@ -279,8 +279,10 @@ enum Recipes {
     /// Single calendar page: weekday in the header, day number below.
     /// C= header colour: red, blue, any name or #hex; empty = subtle monochrome.
     private static var calendarIcon: Item {
-        Item(name: "Calendar Icon",
-             source: .script(command: #"C=black; date +'{"text":"","symbol":"calendar:%-d:%a:'"$C"'"}'"#, refreshSeconds: 60))
+        var i = Item(name: "Calendar Icon",
+                     source: .script(command: #"C=black; date +'{"text":"","symbol":"calendar:%-d:%a:'"$C"'"}'"#, refreshSeconds: 60))
+        i.action = .calendar
+        return i
     }
 
     private static var worldClock: Item {
