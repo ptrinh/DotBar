@@ -67,7 +67,26 @@ final class DotBarView: NSView {
         return NSSize(width: w, height: NSStatusBar.system.thickness)
     }
 
+    /// Opacity used on the menu bar of an inactive display.
+    static let inactiveAlpha: CGFloat = 0.5
+
+    /// Other displays get a bitmap snapshot of the item, drawn with the plain (non-vibrant)
+    /// appearance; the live item on the active menu bar is always vibrant. macOS only dims
+    /// its own plain titles in that snapshot, so custom drawing has to dim itself.
+    private var isInactiveReplicant: Bool {
+        let m = effectiveAppearance.bestMatch(from: [.vibrantDark, .vibrantLight, .darkAqua, .aqua])
+        return m == .darkAqua || m == .aqua
+    }
+
     override func draw(_ dirtyRect: NSRect) {
+        guard isInactiveReplicant, let ctx = NSGraphicsContext.current?.cgContext else { return drawContent() }
+        ctx.setAlpha(Self.inactiveAlpha)
+        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+        drawContent()
+        ctx.endTransparencyLayer()
+    }
+
+    private func drawContent() {
         let b = bounds
         let ts = text.size()
         let tw = textWidth
