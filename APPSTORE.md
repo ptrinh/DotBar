@@ -20,7 +20,7 @@ Build: `scripts/appstore.sh <version> export` (pkg in dist/appstore) or `scripts
   Next to the text, up to three tiny colored dots show status at a glance. Each dot follows rules you define: number ranges, regex, gradients that fade from transparent to a color as a value rises.
   • Fonts, sizes and colors per item • xbar/SwiftBar-compatible output (colors, links, submenus) • Ready-made recipes: CPU, memory, battery, disk, IPs, Bitcoin price, clock • Notifications when a value or color changes • Hotkeys, launch at login, URL scheme for automation • Combine all items into one compact menu bar slot
   Minimal by design: under 1 MB, ~15 MB of memory, near-zero CPU.
-- **App Review notes**: DotBar runs user-provided shell commands via /bin/zsh inside the App Sandbox; it ships with example recipes (uptime, vm_stat, pmset, df, curl to api.coinbase.com). No private APIs, no network access by the app itself.
+- **App Review notes**: DotBar runs user-provided shell commands via /bin/zsh inside the App Sandbox; it ships with example recipes (uptime, vm_stat, pmset, df, curl to api.coinbase.com). The network.client entitlement is only used by those user scripts (e.g. curl for prices, weather). The calendar entitlement is used only when the user adds the Calendar recipe. No private APIs, no analytics.
 - **Screenshots**: 2880×1800 or 1440×900 PNG, at least one. Suggested: menu bar close-up with the BTC + C/M dots item, the dropdown menu, and the Preferences window.
 
 ## Sandbox limits (App Store build only)
