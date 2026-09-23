@@ -4,16 +4,17 @@ Bundle ID `uk.trinh.DotBar` is registered; provisioning profile "DotBar Mac App 
 Build: `scripts/appstore.sh <version> export` (pkg in dist/appstore) or `scripts/appstore.sh <version> upload`.
 
 ## One-time, in App Store Connect (web only, no API)
-1. My Apps → + → New App: platform macOS, name **DotBar**, primary language English, bundle ID uk.trinh.DotBar, SKU `dotbar-mac`.
+1. My Apps → + → New App: platform macOS, name **DotBar: Menu Bar Stats**, primary language English, bundle ID uk.trinh.DotBar, SKU `dotbar-mac`.
 2. Then `scripts/appstore.sh <version> upload` pushes the build.
 
 ## Metadata draft
-- **Subtitle**: Text and status dots in your menu bar
+- **Name**: DotBar: Menu Bar Stats
+- **Subtitle**: Custom text, scripts & dots
 - **Category**: Utilities
 - **Price**: Free (or your choice)
 - **Privacy policy URL**: https://github.com/ptrinh/DotBar/blob/main/PRIVACY.md
 - **Support URL**: https://github.com/ptrinh/DotBar
-- **Keywords**: menu bar,status,script,monitor,cpu,bitcoin,dots,xbar,textbar,widget
+- **Keywords** (no words from name/subtitle, max 100): status,monitor,cpu,ram,battery,bitcoin,xbar,swiftbar,textbar,widget,shell,clock,calendar
 - **Description**:
   DotBar puts your own text in the macOS menu bar: static labels or the output of any shell script, refreshed on a schedule or streamed live.
   Next to the text, up to three tiny colored dots show status at a glance. Each dot follows rules you define: number ranges, regex, gradients that fade from transparent to a color as a value rises.
