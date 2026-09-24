@@ -151,9 +151,13 @@ a battery the command prints nothing, so only the two dots show.
 lp=$(pmset -g | awk '/lowpowermode/{print $2}'); pmset -g batt | awk -F'\t' -v lp="$lp" '/AC Power/{ac=1} /InternalBattery/{split($2,a,"; "); p=a[1]+0; s=a[2]; t=a[3]; sub(/ *present.*/,"",t); c=(s=="charging"||s=="finishing charge")?":charging":(ac?":plugged":""); if (lp==1) c=c ":lowpower"; m="\"" p "% — " s "\""; if (t!="" && t !~ /^0:00/ && t !~ /no estimate/) m=m ",\"" t "\""; if (lp==1) m=m ",\"Low Power Mode on\""; printf "{\"text\":\"\",\"symbol\":\"battery:%d%s\",\"menu\":[%s]}\n", p, c, m}'
 ```
 Menu details (on demand): maximum capacity (with *Service Recommended* below 80 %), cycle count,
-and *Charging on hold* when on power but not charging:
+*Charging on hold* when on power but not charging, then CPU and RAM (share of physical memory,
+as Activity Monitor's "Memory Used"). Hovering CPU or RAM opens a submenu with the top 10
+processes and a *Copy list* row (Homebrew build):
 ```sh
 ioreg -rn AppleSmartBattery | awk '/"CycleCount" =/{cc=$NF} /"ExternalConnected" =/{ext=$NF} /"IsCharging" =/{chg=$NF} /"FullyCharged" =/{full=$NF} /"BatteryData" =/{ if (match($0, /"DesignCapacity"=[0-9]+/)) d=substr($0, RSTART+17, RLENGTH-17); if (match($0, /"NominalChargeCapacity"=[0-9]+/)) n=substr($0, RSTART+24, RLENGTH-24) } END{ if (cc == "") exit; if (d > 0) { h=int(n*100/d+0.5); printf "Maximum capacity: %d%%%s\n", h, (h < 80 ? " — Service Recommended" : "") } printf "Cycle count: %d\n", cc; if (ext == "Yes" && chg == "No" && full == "No") print "Charging on hold" }'
+echo "CPU $(iostat -c 2 -w 1 | tail -1 | awk '{printf "%.0f", 100 - $(NF-3)}')%"; ps -Aceo pcpu=,comm= -r | head -10 | awk '{p=$1; $1=""; printf "--%5.1f%%  %s\n", p, substr($0,2)}'; echo "-----"; echo "--Copy list | bash=/bin/zsh param1=-c param2='ps -Aceo pcpu,comm -r | head -11 | pbcopy'"
+echo "$(vm_stat | awk -v total="$(sysctl -n hw.memsize)" '/page size of/{ps=$8} /Pages active/{a=$3} /Pages wired down/{w=$4} /Pages occupied by compressor/{c=$5} END{gsub(/[^0-9]/,"",a); gsub(/[^0-9]/,"",w); gsub(/[^0-9]/,"",c); u=(a+w+c)*ps; printf "RAM %.0f%%  (%.1f / %.0f GB)", u*100/total, u/1073741824, total/1073741824}')"; ps -Aceo rss=,comm= -m | head -10 | awk '{m=$1; $1=""; printf "--%6.0f MB  %s\n", m/1024, substr($0,2)}'; echo "-----"; echo "--Copy list | bash=/bin/zsh param1=-c param2='{ echo \"    MB  COMMAND\"; ps -Aceo rss=,comm= -m | head -10 | while read k c; do printf \"%6d  %s\\\\n\" \$((k/1024)) \"\$c\"; done; } | pbcopy'"
 ```
 Dot 1 fades from transparent (≤40 %) to red (100 %) with CPU, dot 2 from transparent (≤50 %) to yellow with RAM. Uses the **Gradient** color mode: pick "Gradient", set the value range (40 → 100 / 50 → 100) and the two end colors; alpha is interpolated, so a `#RRGGBB00` start fades in.
 ```sh

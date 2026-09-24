@@ -132,6 +132,13 @@ enum Recipes {
         let ram = #"vm_stat | awk '/Pages free/{f=$3} /Pages active/{a=$3} /Pages inactive/{i=$3} /Pages speculative/{s=$3} /Pages wired down/{w=$4} /Pages occupied by compressor/{c=$5} END{gsub(/[^0-9]/,"",f);gsub(/[^0-9]/,"",a);gsub(/[^0-9]/,"",i);gsub(/[^0-9]/,"",s);gsub(/[^0-9]/,"",w);gsub(/[^0-9]/,"",c); t=f+a+i+s+w+c; if (t>0) printf "%.0f", (a+w+c)*100/t}'"#
         var i = batteryIcon
         i.name = "Battery + CPU/RAM dots"
+        // Menu adds CPU and RAM (share of physical memory, as Activity Monitor's "Memory Used").
+        // Hovering either opens a submenu with its top 10 processes and a "Copy list" row
+        // (not in the sandbox: `ps` is denied there).
+        let cpuTop = isSandboxed ? "" : #"; ps -Aceo pcpu=,comm= -r | head -10 | awk '{p=$1; $1=""; printf "--%5.1f%%  %s\n", p, substr($0,2)}'; echo "-----"; echo "--Copy list | bash=/bin/zsh param1=-c param2='ps -Aceo pcpu,comm -r | head -11 | pbcopy'""#
+        let ramTop = isSandboxed ? "" : #"; ps -Aceo rss=,comm= -m | head -10 | awk '{m=$1; $1=""; printf "--%6.0f MB  %s\n", m/1024, substr($0,2)}'; echo "-----"; echo "--Copy list | bash=/bin/zsh param1=-c param2='{ echo \"    MB  COMMAND\"; ps -Aceo rss=,comm= -m | head -10 | while read k c; do printf \"%6d  %s\\\\n\" \$((k/1024)) \"\$c\"; done; } | pbcopy'""#
+        let ramLine = #"vm_stat | awk -v total="$(sysctl -n hw.memsize)" '/page size of/{ps=$8} /Pages active/{a=$3} /Pages wired down/{w=$4} /Pages occupied by compressor/{c=$5} END{gsub(/[^0-9]/,"",a); gsub(/[^0-9]/,"",w); gsub(/[^0-9]/,"",c); u=(a+w+c)*ps; printf "RAM %.0f%%  (%.1f / %.0f GB)", u*100/total, u/1073741824, total/1073741824}'"#
+        i.menuCommand += #"; echo "CPU $("# + cpuPercentCommand + #")%""# + cpuTop + #"; echo "$("# + ramLine + #")""# + ramTop
         i.hideWhenEmpty = false          // no battery: the icon is simply absent, the dots stay
         i.dots = [
             Dot(source: .script(command: cpuPercentCommand, refreshSeconds: 10),
