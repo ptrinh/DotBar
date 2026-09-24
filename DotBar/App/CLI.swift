@@ -27,6 +27,7 @@ enum CLI {
       dotbar enable|disable <item>
       dotbar remove <item>
       dotbar test <item|command> [--json]  run it and show how DotBar reads the output
+      dotbar usage <claude|codex>          AI session / weekly usage as DotBar JSON
       dotbar schema                        JSON Schema of items.json
       dotbar path                          location of items.json
 
@@ -74,6 +75,7 @@ enum CLI {
             try mutate { items in items.remove(at: index(of: target, in: items)) }
             print("removed \(target.name)")
         case "test": try test(rest, json: json)
+        case "usage": print(AIUsage.output(for: try one(rest)))
         default: throw Failure(message: "unknown command \"\(cmd)\"\n\n\(usage)", code: 2)
         }
     }

@@ -6,7 +6,10 @@ enum Recipes {
 
     /// Fresh UUIDs on every call, so a recipe can be added more than once.
     /// Mac App Store build runs inside the App Sandbox: `top`, `ps`, `ping`, `ipconfig getifaddr`, `git` are denied there.
+    /// The environment variable is set when launched from a shell but not always from Finder /
+    /// `open`; the container home is there either way.
     static let isSandboxed = ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+        || NSHomeDirectory().contains("/Library/Containers/")
 
     /// CPU % : `iostat` over one second outside the sandbox (≈0.01 s CPU per run; `top -l 1`
     /// cost ≈0.75 s, run every few seconds by several recipes), 1-minute load average / core
@@ -28,7 +31,7 @@ enum Recipes {
     }
 
     /// Recipes whose commands the App Sandbox denies (ping raw sockets, git via xcrun, ipconfig SSID).
-    private static let sandboxUnavailable: Set<String> = ["AI Usage Icon (Claude)", "AI Usage Icon (Codex)", "Now Playing", "Ping 1.1.1.1", "Ping stream", "Git Branch", "Wi-Fi SSID",
+    private static let sandboxUnavailable: Set<String> = ["Now Playing", "Ping 1.1.1.1", "Ping stream", "Git Branch", "Wi-Fi SSID",
                                                           "Network Throughput", "VPN", "Time Machine", "Displays", "Bluetooth Battery"]
 
     /// Every preset, sorted A→Z by name (the Preferences "+" menu and `dotbar recipes` list them
@@ -339,20 +342,20 @@ enum Recipes {
 
     /// Days left until a date. Edit the date.
     /// Claude session (5 h) and weekly usage as two bars; the menu has % and reset times.
-    /// Reads Claude Code's own sign-in (Keychain, or ~/.claude/.credentials.json) and calls the
+    /// `dotbar usage claude` runs in-process (AIUsage): reads Claude Code's sign-in and calls the
     /// usage endpoint Claude Code uses. Every 3 min: usage moves slowly.
     static var aiUsage: Item {
         var i = Item(name: "AI Usage Icon (Claude)",
-                     source: .script(command: #"c=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null || cat "$HOME/.claude/.credentials.json" 2>/dev/null); t=$(printf %s "$c" | plutil -extract claudeAiOauth.accessToken raw -o - - 2>/dev/null); [ -z "$t" ] && { echo '{"text":"","symbol":"usage:0:0:Claude","menu":["Sign in to Claude Code to see usage | disabled=true"]}'; exit 0; }; j=$(curl -s --max-time 8 https://api.anthropic.com/api/oauth/usage -H "Authorization: Bearer $t" -H "anthropic-beta: oauth-2025-04-20"); g() { printf %s "$j" | plutil -extract "$1" raw -o - - 2>/dev/null; }; s=$(g five_hour.utilization); w=$(g seven_day.utilization); [ -z "$s$w" ] && { echo '{"text":"","symbol":"usage:0:0:Claude","menu":["Usage unavailable — open Claude Code to refresh the sign-in | disabled=true"]}'; exit 0; }; at() { d=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "${1%%.*}" +%s 2>/dev/null) && date -r "$d" "$2"; }; left() { d=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "${1%%.*}" +%s 2>/dev/null) || return; m=$(( (d - $(date +%s)) / 60 )); [ $m -lt 0 ] && m=0; printf "%dh %02dm" $((m / 60)) $((m % 60)); }; sr=$(g five_hour.resets_at); wr=$(g seven_day.resets_at); printf '{"text":"","symbol":"usage:%.0f:%.0f:Claude","menu":["Session %.0f%%  ·  resets in %s","Weekly %.0f%%  ·  resets %s","---","Open usage page | href=https://claude.ai/settings/usage"]}\n' "$s" "$w" "$s" "$(left "$sr")" "$w" "$(at "$wr" "+%a %H:%M")""#, refreshSeconds: 180))
+                     source: .script(command: "dotbar usage claude", refreshSeconds: 180))
         i.paddingLeft = 0; i.paddingRight = 0
         return i
     }
 
-    /// Codex (ChatGPT plan) session (5 h) and weekly usage, same two bars. Reads Codex CLI's
-    /// sign-in (~/.codex/auth.json) and the usage endpoint behind its /status.
+    /// Codex (ChatGPT plan) session (5 h) and weekly usage, same two bars. `dotbar usage codex`
+    /// reads Codex CLI's sign-in (~/.codex/auth.json; in the sandbox via a one-time file grant).
     static var codexUsage: Item {
         var i = Item(name: "AI Usage Icon (Codex)",
-                     source: .script(command: #"f="$HOME/.codex/auth.json"; t=$(plutil -extract tokens.access_token raw -o - "$f" 2>/dev/null); a=$(plutil -extract tokens.account_id raw -o - "$f" 2>/dev/null); [ -z "$t" ] && { echo '{"text":"","symbol":"usage:0:0:Codex","menu":["Sign in to Codex CLI to see usage | disabled=true"]}'; exit 0; }; j=$(curl -s --max-time 8 https://chatgpt.com/backend-api/wham/usage -H "Authorization: Bearer $t" -H "ChatGPT-Account-Id: $a" -H "User-Agent: codex_cli_rs"); g() { printf %s "$j" | plutil -extract "$1" raw -o - - 2>/dev/null; }; s=$(g rate_limit.primary_window.used_percent); w=$(g rate_limit.secondary_window.used_percent); [ -z "$s$w" ] && { echo '{"text":"","symbol":"usage:0:0:Codex","menu":["Usage unavailable — run codex once to refresh the sign-in | disabled=true"]}'; exit 0; }; sr=$(g rate_limit.primary_window.reset_after_seconds); wr=$(g rate_limit.secondary_window.reset_at); m=$(( ${sr:-0} / 60 )); printf '{"text":"","symbol":"usage:%.0f:%.0f:Codex","menu":["Session %.0f%%  ·  resets in %dh %02dm","Weekly %.0f%%  ·  resets %s","---","Open usage page | href=https://chatgpt.com/codex/settings/usage"]}\n' "${s:-0}" "${w:-0}" "${s:-0}" $((m / 60)) $((m % 60)) "${w:-0}" "$( [ -n "$wr" ] && date -r "$wr" "+%a %H:%M")""#, refreshSeconds: 180))
+                     source: .script(command: "dotbar usage codex", refreshSeconds: 180))
         i.paddingLeft = 0; i.paddingRight = 0
         return i
     }

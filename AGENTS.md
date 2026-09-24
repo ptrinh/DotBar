@@ -58,6 +58,11 @@ many working examples.
   `"symbol":"battery:<percent>[:charging|:plugged][:lowpower]"`,
   `"symbol":"usage:<top>:<bottom>[:<label>]"` (two progress bars, 0–100, optional label above).
 
+## AI usage
+
+`dotbar usage claude|codex` prints the two-bar JSON (`usage:<session>:<weekly>:<label>`); an item
+whose command is exactly that runs it in-process, so it also works in the sandboxed build.
+
 ## `menuCommand`
 
 Extra menu lines from a separate command that runs only at launch and whenever the menu opens

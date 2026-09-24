@@ -316,20 +316,28 @@ f="$HOME/.dotbar-pomodoro"; if [ -f "$f" ]; then rm "$f"; else echo $(( $(date +
 ```
 A click script refreshes its item when it finishes, so the bar updates right away.
 
-### AI Usage Icon (Claude) — every 180s (Homebrew build; added on first launch when Claude Code is signed in)
+### AI Usage Icon (Claude) — every 180s (added on first launch when Claude Code is signed in)
 Claude session (5 h, top bar) and weekly (bottom bar) usage, like Claude's own usage meters.
-Click for % and reset times. Uses the sign-in Claude Code already stored (Keychain, or
-`~/.claude/.credentials.json`) and the usage endpoint Claude Code calls; nothing else is sent.
+Click for % and reset times.
 ```sh
-c=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null || cat "$HOME/.claude/.credentials.json" 2>/dev/null); t=$(printf %s "$c" | plutil -extract claudeAiOauth.accessToken raw -o - - 2>/dev/null); [ -z "$t" ] && { echo '{"text":"","symbol":"usage:0:0:Claude","menu":["Sign in to Claude Code to see usage | disabled=true"]}'; exit 0; }; j=$(curl -s --max-time 8 https://api.anthropic.com/api/oauth/usage -H "Authorization: Bearer $t" -H "anthropic-beta: oauth-2025-04-20"); g() { printf %s "$j" | plutil -extract "$1" raw -o - - 2>/dev/null; }; s=$(g five_hour.utilization); w=$(g seven_day.utilization); [ -z "$s$w" ] && { echo '{"text":"","symbol":"usage:0:0:Claude","menu":["Usage unavailable — open Claude Code to refresh the sign-in | disabled=true"]}'; exit 0; }; at() { d=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "${1%%.*}" +%s 2>/dev/null) && date -r "$d" "$2"; }; left() { d=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "${1%%.*}" +%s 2>/dev/null) || return; m=$(( (d - $(date +%s)) / 60 )); [ $m -lt 0 ] && m=0; printf "%dh %02dm" $((m / 60)) $((m % 60)); }; sr=$(g five_hour.resets_at); wr=$(g seven_day.resets_at); printf '{"text":"","symbol":"usage:%.0f:%.0f:Claude","menu":["Session %.0f%%  ·  resets in %s","Weekly %.0f%%  ·  resets %s","---","Open usage page | href=https://claude.ai/settings/usage"]}\n' "$s" "$w" "$s" "$(left "$sr")" "$w" "$(at "$wr" "+%a %H:%M")"
+dotbar usage claude
 ```
+DotBar runs this in-process. The Homebrew build reads the sign-in Claude Code already stored
+(Keychain, or `~/.claude/.credentials.json`) and calls the usage endpoint Claude Code uses.
+The Mac App Store build cannot reach Claude Code's Keychain item, so the menu offers a one-time
+**Set up Claude usage…**: you pick `~/.claude`, and DotBar adds a small `Stop` hook to Claude Code's
+`settings.json` (backup: `settings.json.dotbar-bak`). After each Claude Code reply, at most every
+2 minutes, the hook saves the usage response, not the sign-in, to `~/.claude/dotbar-usage.json`,
+which DotBar reads.
 
-### AI Usage Icon (Codex) — every 180s (Homebrew build; added on first launch when Codex CLI is signed in and Claude Code is not)
-Codex (ChatGPT plan) session (5 h, top bar) and weekly (bottom bar) usage. Click for % and reset
-times. Uses Codex CLI's sign-in (`~/.codex/auth.json`) and the usage endpoint behind its `/status`.
+### AI Usage Icon (Codex) — every 180s (added on first launch when Codex CLI is signed in and Claude Code is not)
+Codex (ChatGPT plan) session (5 h, top bar) and weekly (bottom bar) usage. Click for % and reset times.
 ```sh
-f="$HOME/.codex/auth.json"; t=$(plutil -extract tokens.access_token raw -o - "$f" 2>/dev/null); a=$(plutil -extract tokens.account_id raw -o - "$f" 2>/dev/null); [ -z "$t" ] && { echo '{"text":"","symbol":"usage:0:0:Codex","menu":["Sign in to Codex CLI to see usage | disabled=true"]}'; exit 0; }; j=$(curl -s --max-time 8 https://chatgpt.com/backend-api/wham/usage -H "Authorization: Bearer $t" -H "ChatGPT-Account-Id: $a" -H "User-Agent: codex_cli_rs"); g() { printf %s "$j" | plutil -extract "$1" raw -o - - 2>/dev/null; }; s=$(g rate_limit.primary_window.used_percent); w=$(g rate_limit.secondary_window.used_percent); [ -z "$s$w" ] && { echo '{"text":"","symbol":"usage:0:0:Codex","menu":["Usage unavailable — run codex once to refresh the sign-in | disabled=true"]}'; exit 0; }; sr=$(g rate_limit.primary_window.reset_after_seconds); wr=$(g rate_limit.secondary_window.reset_at); m=$(( ${sr:-0} / 60 )); printf '{"text":"","symbol":"usage:%.0f:%.0f:Codex","menu":["Session %.0f%%  ·  resets in %dh %02dm","Weekly %.0f%%  ·  resets %s","---","Open usage page | href=https://chatgpt.com/codex/settings/usage"]}\n' "${s:-0}" "${w:-0}" "${s:-0}" $((m / 60)) $((m % 60)) "${w:-0}" "$( [ -n "$wr" ] && date -r "$wr" "+%a %H:%M")"
+dotbar usage codex
 ```
+Reads Codex CLI's sign-in (`~/.codex/auth.json`) and the usage endpoint behind its `/status`. In the
+Mac App Store build the menu first asks you to pick that file once (**Allow access to
+~/.codex/auth.json…**).
 
 ### Now Playing — every 5s (Homebrew build)
 Track in Music or Spotify; hidden when nothing plays, never launches either app. Click = play / pause.

@@ -9,6 +9,12 @@ enum ScriptRunner {
     }
 
     static func runSync(_ command: String, timeout: TimeInterval, extra: [String: String] = [:]) -> ScriptOutput {
+        // `dotbar usage <provider>` runs in-process: a child shell in the sandbox could not read
+        // the sign-ins it needs, and the Homebrew build then needs no `dotbar` on PATH.
+        let words = command.split(whereSeparator: \.isWhitespace)
+        if words.count == 3, words[0] == "dotbar", words[1] == "usage" {
+            return .parse(AIUsage.output(for: String(words[2])))
+        }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
         p.arguments = ["-c", command]
