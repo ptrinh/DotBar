@@ -372,7 +372,7 @@ write(hero, "01-hero-2880x1800.png")
 let aiShot = canvas {
     text("Two bars. Everything you need to know.", font(96, .bold), white,
          x: 200, y: H - 260, width: W - 400, align: .center)
-    text("Top: this 5-hour session. Bottom: this week. Red from 90 %.",
+    text("Top: this 5-hour session. Bottom: this week. Red from 90%.",
          font(52, .regular), dim(0.7), x: 200, y: H - 350, width: W - 400, align: .center)
 
     // The two icons, large.

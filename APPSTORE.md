@@ -17,7 +17,7 @@ Build: `scripts/appstore.sh <version> export` (pkg in dist/appstore) or `scripts
 - **Keywords** (no words from name/subtitle, max 100): anthropic,openai,chatgpt,quota,limit,tokens,monitor,cpu,ram,battery,calendar,xbar,swiftbar
 - **Promotional text** (170 max, editable without review): Never get cut off mid-task again: see how much of your Claude or Codex session and weekly limit is left, right in the menu bar.
 - **Description**:
-  Know where you stand with your AI limits at a glance. DotBar shows your Claude and Codex usage as two tiny bars in the menu bar: the top bar is your current 5-hour session, the bottom bar your weekly limit. It turns red from 90 %, so a limit never surprises you in the middle of a task.
+  Know where you stand with your AI limits at a glance. DotBar shows your Claude and Codex usage as two tiny bars in the menu bar: the top bar is your current 5-hour session, the bottom bar your weekly limit. It turns red from 90%, so a limit never surprises you in the middle of a task.
 
   Click the icon for the exact numbers: session and weekly percentage, when each resets, and a link to your usage page.
 

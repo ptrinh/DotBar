@@ -133,7 +133,7 @@ enum Recipes {
     }
 
     /// First 3 digits of the BTC price as text; dot 1 fades transparent -> red with CPU %, dot 2 transparent -> yellow with RAM %.
-    /// Battery icon with CPU (C) and RAM (M) dots that fade in above 40 % / 50 %.
+    /// Battery icon with CPU (C) and RAM (M) dots that fade in above 40% / 50%.
     static var batteryWithLoadDots: Item {
         let ram = #"vm_stat | awk '/Pages free/{f=$3} /Pages active/{a=$3} /Pages inactive/{i=$3} /Pages speculative/{s=$3} /Pages wired down/{w=$4} /Pages occupied by compressor/{c=$5} END{gsub(/[^0-9]/,"",f);gsub(/[^0-9]/,"",a);gsub(/[^0-9]/,"",i);gsub(/[^0-9]/,"",s);gsub(/[^0-9]/,"",w);gsub(/[^0-9]/,"",c); t=f+a+i+s+w+c; if (t>0) printf "%.0f", (a+w+c)*100/t}'"#
         var i = batteryIcon

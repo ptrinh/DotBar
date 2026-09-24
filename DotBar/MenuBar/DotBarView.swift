@@ -360,7 +360,7 @@ final class DotBarView: NSView {
     /// `symbol: "battery:<percent>[:charging|:plugged]"`: the macOS 27 battery turned upright: a slim
     /// solid pill with a half-disc cap on top, level filled from the bottom over a grey track.
     /// Charging: bolt; on power, not charging: plug lying across. Glyphs are drawn in the ink
-    /// colour, spill over the outline, and are ringed by a cut-out gap. Yellow in Low Power Mode (`:lowpower`), else red at 20 % or less on battery.
+    /// colour, spill over the outline, and are ringed by a cut-out gap. Yellow in Low Power Mode (`:lowpower`), else red at 20% or less on battery.
     /// Every edge is snapped to device pixels.
     private static func batteryAttachment(_ name: String, color: NSColor, font base: NSFont) -> NSAttributedString? {
         guard name.hasPrefix("battery:") else { return nil }
@@ -425,7 +425,7 @@ final class DotBarView: NSView {
 
     /// `symbol: "usage:<top>:<bottom>[:<label>]"`: two parallel progress bars like "=" (e.g. AI
     /// session and weekly usage, 0–100), with an optional small label above (e.g. "Claude").
-    /// Ink over a grey track; red from 90 %. Edges snapped to device pixels.
+    /// Ink over a grey track; red from 90%. Edges snapped to device pixels.
     private static func usageAttachment(_ name: String, color: NSColor, font base: NSFont) -> NSAttributedString? {
         guard name.hasPrefix("usage:") else { return nil }
         var parts = name.dropFirst("usage:".count).split(separator: ":", omittingEmptySubsequences: false).map(String.init)
