@@ -3,7 +3,7 @@
 // Compiled together with every app source EXCEPT DotBar/App/DotBarApp.swift (which owns @main).
 // Renders, without ever showing anything on screen:
 //   - prefs.png      the real SwiftUI Preferences window (900x640 @2x)
-//   - strip-*.png    the real AppKit DotBarView for two items (4x, transparent background)
+//   - strip-*.png    the real AppKit DotBarView per item (4x, transparent background)
 //   - recipes.txt    the recipe names, for the composer
 //
 // HOME is redirected to a temp dir by the calling script, so the user's items.json is untouched.
@@ -27,35 +27,42 @@ func run() {
 
     // MARK: Items
 
-    // Screenshot item: BTC text with the CPU/RAM dots of the "Battery + CPU/RAM dots" recipe.
-    var btc = Recipes.all().first { $0.name == "BTC 3 digits" }!
-    let loadDots = Recipes.all().first { $0.name == "Battery + CPU/RAM dots" }!
-    btc.name = "BTC 3 digits + CPU/RAM dots"
-    btc.dots = loadDots.dots
-    btc.dotSize = loadDots.dotSize
-    // Deterministic dot inputs (the real recipe shells out to top / vm_stat).
-    btc.dots[0].source = .script(command: "echo 86", refreshSeconds: 10)
-    btc.dots[1].source = .script(command: "echo 91", refreshSeconds: 15)
-    let clock = Recipes.all().first { $0.name == "Clock" }!
+    // Screenshot items, with fixed outputs: nothing hits the network or reads a sign-in.
+    func preset(_ name: String) -> Item { Recipes.all().first { $0.name == name }! }
+    func fixed(_ item: Item, _ output: String) -> Item {
+        var i = item; i.source = .static(text: output); return i
+    }
+    let claude = fixed(preset("AI Usage Icon (Claude)"), #"{"text":"","symbol":"usage:38:64:Claude"}"#)
+    let codex = fixed(preset("AI Usage Icon (Codex)"), #"{"text":"","symbol":"usage:12:47:Codex"}"#)
+    var battery = fixed(preset("Battery + CPU/RAM dots"), #"{"text":"","symbol":"battery:82"}"#)
+    // Deterministic dot inputs (the real recipe runs iostat / vm_stat).
+    battery.dots[0].source = .script(command: "echo 86", refreshSeconds: 10)
+    battery.dots[1].source = .script(command: "echo 91", refreshSeconds: 15)
+    let calendar = fixed(preset("Calendar Icon"), #"{"text":"","symbol":"calendar:24:Thu:black"}"#)
+    // Kept for the menu slide: a text item next to the icons.
+    let btc = fixed(preset("BTC 3 digits"), "805")
 
     let state = AppState.shared
-
-    // Add the items with a static source first so nothing hits the network, then restore
-    // the real commands (outputs are keyed by item id, so they survive the edit).
-    var btcStatic = btc; btcStatic.source = .static(text: "805")
-    var clockStatic = clock; clockStatic.source = .static(text: "Sat 20 14:05")
-    state.items = [btcStatic, clockStatic]
-    state.refresh(btcStatic)
-    state.refresh(clockStatic)
+    state.items = [claude, codex, battery, calendar, btc]
+    for i in state.items { state.refresh(i) }
     RunLoop.current.run(until: Date().addingTimeInterval(2.0))
-    state.update(btc)
-    state.update(clock)
+
+    for i in state.items { print("\(i.name): \(state.output(for: i)?.symbol ?? state.output(for: i)?.text ?? "nil")") }
+    // Put the real commands back (outputs are keyed by item id, so they survive), so the
+    // Preferences capture shows the presets as users see them.
+    for i in state.items {
+        guard var real = Recipes.all().first(where: { $0.name == i.name }) else { continue }
+        real.id = i.id
+        real.dots = i.dots.enumerated().map { k, d in
+            var d = d; if k < real.dots.count { d.source = real.dots[k].source }; return d
+        }
+        state.update(real)
+    }
     RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+    for d in battery.dots { print("dot \(d.label): \(state.output(for: d, in: battery)?.text ?? "nil")") }
 
-    print("btc output: \(state.output(for: btc)?.text ?? "nil")")
-    for d in btc.dots { print("dot \(d.label): \(state.output(for: d, in: btc)?.text ?? "nil")") }
-
-    try? Recipes.all().map(\.name).joined(separator: "\n")
+    // App Store screenshots: only the presets the sandboxed build offers.
+    try? Recipes.all().map(\.name).filter { !Recipes.sandboxUnavailable.contains($0) }.joined(separator: "\n")
         .write(to: out("recipes.txt"), atomically: true, encoding: .utf8)
 
     // MARK: Status item strips
@@ -88,13 +95,18 @@ func run() {
         }
     }
 
+    renderStrip(claude, name: "strip-claude.png")
+    renderStrip(codex, name: "strip-codex.png")
+    renderStrip(claude, name: "strip-claude-16x.png", scale: 16)     // sharp close-up
+    renderStrip(codex, name: "strip-codex-16x.png", scale: 16)
+    renderStrip(battery, name: "strip-battery.png")
+    renderStrip(calendar, name: "strip-calendar.png")
     renderStrip(btc, name: "strip-btc.png")
-    renderStrip(clock, name: "strip-clock.png")
 
     // MARK: Preferences window (offscreen, never ordered in)
 
     let selection = PreferencesWindowController.SelectionModel()
-    selection.itemID = btc.id
+    selection.itemID = claude.id
 
     // Same construction as the real app: NSHostingController in the window, so SwiftUI
     // gets the usual safe-area insets under the title bar.

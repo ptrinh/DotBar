@@ -10,6 +10,8 @@ icons from any shell command. Minimal by design: ~600 KB binary, ~18 MB RAM idle
 
 https://github.com/user-attachments/assets/c993caa5-b90e-471b-bb1d-4a52682bb75c
 
+![AI usage: session and weekly bars for Claude and Codex](docs/screenshots/ai-usage.png)
+
 | Preferences | Menu and recipes |
 |---|---|
 | ![Preferences](docs/screenshots/preferences.png) | ![Menu and recipes](docs/screenshots/menu-recipes.png) |

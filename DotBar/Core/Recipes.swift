@@ -31,7 +31,7 @@ enum Recipes {
     }
 
     /// Recipes whose commands the App Sandbox denies (ping raw sockets, git via xcrun, ipconfig SSID).
-    private static let sandboxUnavailable: Set<String> = ["Now Playing", "Ping 1.1.1.1", "Ping stream", "Git Branch", "Wi-Fi SSID",
+    static let sandboxUnavailable: Set<String> = ["Now Playing", "Ping 1.1.1.1", "Ping stream", "Git Branch", "Wi-Fi SSID",
                                                           "Network Throughput", "VPN", "Time Machine", "Displays", "Bluetooth Battery"]
 
     /// Every preset, sorted A→Z by name (the Preferences "+" menu and `dotbar recipes` list them

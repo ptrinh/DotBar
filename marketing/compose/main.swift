@@ -16,8 +16,13 @@ func load(_ name: String) -> NSImage {
     return i
 }
 
+let stripClaude = load("strip-claude.png")
+let stripCodex = load("strip-codex.png")
+let stripBattery = load("strip-battery.png")
+let stripCalendar = load("strip-calendar.png")
 let stripBTC = load("strip-btc.png")
-let stripClock = load("strip-clock.png")
+let stripClaudeBig = load("strip-claude-16x.png")
+let stripCodexBig = load("strip-codex-16x.png")
 let icon = NSImage(contentsOfFile: iconPath)!
 let recipeNames = (try? String(contentsOfFile: "\(work)/recipes.txt", encoding: .utf8))?
     .split(separator: "\n").map(String.init) ?? []
@@ -165,19 +170,31 @@ func menuBar(rect: NSRect, itemHeight: CGFloat, radius: CGFloat, compact: Bool =
             rx -= 42
         }
     }
+    let menuRight = rx
 
-    // DotBar items (real rendered views), highlighted with a soft pill behind them.
-    let clockW = stripClock.size.width * (itemHeight / stripClock.size.height)
-    rx -= clockW
-    drawStrip(stripClock, x: rx, midY: midY, height: itemHeight)
-    rx -= 56
-
-    let btcW = stripBTC.size.width * (itemHeight / stripBTC.size.height)
-    rx -= btcW
-    let pill = NSRect(x: rx - 26, y: midY - itemHeight * 0.62, width: btcW + 52, height: itemHeight * 1.24)
-    NSColor(srgbRed: 0.42, green: 0.52, blue: 1.0, alpha: 0.22).setFill()
-    rounded(pill, pill.height / 2).fill()
-    drawStrip(stripBTC, x: rx, midY: midY, height: itemHeight)
+    // DotBar items (real rendered views), right to left; the AI usage icons get a soft pill.
+    let items: [(NSImage, Bool)] = compact
+        ? [(stripCalendar, false), (stripBattery, false), (stripClaude, true)]
+        : [(stripCalendar, false), (stripBattery, false), (stripCodex, true), (stripClaude, true)]
+    var pillRange: (CGFloat, CGFloat)?
+    for (img, highlight) in items {
+        let w = img.size.width * (itemHeight / img.size.height)
+        rx -= w
+        if highlight { pillRange = (rx, pillRange?.1 ?? rx + w) }
+        rx -= 50
+    }
+    if let (lo, hi) = pillRange {
+        let pill = NSRect(x: lo - 30, y: midY - itemHeight * 0.66, width: hi - lo + 60, height: itemHeight * 1.32)
+        NSColor(srgbRed: 0.85, green: 0.47, blue: 0.34, alpha: 0.22).setFill()
+        rounded(pill, pill.height / 2).fill()
+    }
+    rx = menuRight
+    for (img, _) in items {
+        let w = img.size.width * (itemHeight / img.size.height)
+        rx -= w
+        drawStrip(img, x: rx, midY: midY, height: itemHeight)
+        rx -= 50
+    }
 }
 
 
@@ -298,9 +315,9 @@ func patchedPrefs(_ image: NSImage) -> NSImage {
         let x = CGFloat(cb.maxX) + 18 * scale
         let nameFont = NSFont.systemFont(ofSize: 13 * scale, weight: .regular)
         let subFont = NSFont.systemFont(ofSize: 10 * scale, weight: .regular)
-        let name = NSAttributedString(string: "BTC 3 digits + CPU/RAM dots",
+        let name = NSAttributedString(string: "AI Usage Icon (Claude)",
                                       attributes: [.font: nameFont, .foregroundColor: NSColor.white])
-        let sub = NSAttributedString(string: "60s · 2 dots",
+        let sub = NSAttributedString(string: "180s",
                                      attributes: [.font: subFont, .foregroundColor: NSColor(white: 1, alpha: 0.75)])
         name.draw(at: NSPoint(x: x, y: r.minY + r.height * 0.50))
         sub.draw(at: NSPoint(x: x, y: r.minY + r.height * 0.16))
@@ -327,18 +344,17 @@ let hero = canvas {
     text("DotBar", font(66, .semibold), white, x: 170 + iconSide + 40, y: H - 150 - iconSide + 78)
     text("for macOS", font(40, .regular), dim(0.55), x: 170 + iconSide + 44, y: H - 150 - iconSide + 28)
 
-    text("Your text. Your dots.\nIn the menu bar.", font(150, .bold), white,
+    text("Your AI limits,\nalways in sight.", font(150, .bold), white,
          x: 200, y: 1010, width: W - 400, align: .center)
 
-    text("Static text or any shell script, with up to 3 rule-driven status dots.",
+    text("Claude and Codex session and weekly usage, right in the menu bar.",
          font(54, .regular), dim(0.72), x: 200, y: 930, width: W - 400, align: .center)
 
     menuBar(rect: NSRect(x: 240, y: 560, width: W - 480, height: 240), itemHeight: 96, radius: 46)
 
-    // Three short, truthful feature labels.
-    let features = [("timer", "Interval or streaming scripts"),
-                    ("circle.grid.2x1.fill", "1–3 rule-driven dots"),
-                    ("terminal", "xbar / SwiftBar syntax")]
+    let features = [("gauge.with.dots.needle.33percent", "Session + weekly limits"),
+                    ("sparkles", "Claude and Codex"),
+                    ("lock", "Your sign-in never leaves your Mac")]
     let colW = (W - 400) / 3
     for (i, f) in features.enumerated() {
         let cx = 200 + colW * CGFloat(i)
@@ -351,7 +367,77 @@ let hero = canvas {
 }
 write(hero, "01-hero-2880x1800.png")
 
-// MARK: - 2. Preferences
+// MARK: - 2. AI usage close-up
+
+let aiShot = canvas {
+    text("Two bars. Everything you need to know.", font(96, .bold), white,
+         x: 200, y: H - 260, width: W - 400, align: .center)
+    text("Top: this 5-hour session. Bottom: this week. Red from 90 %.",
+         font(52, .regular), dim(0.7), x: 200, y: H - 350, width: W - 400, align: .center)
+
+    // The two icons, large.
+    let bigH: CGFloat = 300
+    let claudeW = stripClaudeBig.size.width * (bigH / stripClaudeBig.size.height)
+    let codexW = stripCodexBig.size.width * (bigH / stripCodexBig.size.height)
+    let gap: CGFloat = 160
+    let total = claudeW + gap + codexW
+    let leftX: CGFloat = 330
+    let iconsMid: CGFloat = 900
+    let card = NSRect(x: leftX - 90, y: iconsMid - 220, width: total + 180, height: 440)
+    withShadow(blur: 70, offsetY: -20, alpha: 0.55) {
+        rgb(30, 30, 34, 0.96).setFill()
+        rounded(card, 48).fill()
+    }
+    dim(0.12).setStroke()
+    let cp = rounded(card.insetBy(dx: 1, dy: 1), 48); cp.lineWidth = 2; cp.stroke()
+    drawStrip(stripClaudeBig, x: leftX, midY: iconsMid, height: bigH)
+    drawStrip(stripCodexBig, x: leftX + claudeW + gap, midY: iconsMid, height: bigH)
+
+    // The dropdown the Claude icon opens.
+    let rows: [(String, CGFloat)] = [("Session 38%  ·  resets in 2h 14m", 0.95),
+                                     ("Weekly 64%  ·  resets Mon 19:00", 0.95),
+                                     ("Updated 1 min ago", 0.45),
+                                     ("SEPARATOR", 0),
+                                     ("Open usage page", 0.95)]
+    let rowH: CGFloat = 86
+    let panelW: CGFloat = 980
+    let panelH = 40 + rowH * CGFloat(rows.count) - 30
+    let panel = NSRect(x: W - 250 - panelW, y: iconsMid - panelH / 2, width: panelW, height: panelH)
+    withShadow(blur: 70, offsetY: -22, alpha: 0.6) {
+        rgb(44, 44, 48, 0.98).setFill()
+        rounded(panel, 28).fill()
+    }
+    dim(0.12).setStroke()
+    let pp = rounded(panel, 28); pp.lineWidth = 2; pp.stroke()
+    var y = panel.maxY - 20
+    for (t, a) in rows {
+        if t == "SEPARATOR" {
+            y -= rowH / 2 - 15
+            dim(0.16).setFill()
+            NSRect(x: panel.minX + 28, y: y, width: panelW - 56, height: 2).fill()
+            y -= rowH / 2 - 15
+            continue
+        }
+        y -= rowH
+        text(t, font(a < 0.5 ? 40 : 48, .regular), dim(a), x: panel.minX + 46, y: y + (rowH - 60) / 2 + 6)
+    }
+
+    let notes = [("checkmark.seal", "Reads the sign-in Claude Code or Codex CLI already has"),
+                 ("hand.raised", "App Store build: one click to allow, nothing to paste"),
+                 ("bolt.slash", "Refreshes every 3 minutes, near-zero CPU")]
+    let colW = (W - 400) / 3
+    for (i, f) in notes.enumerated() {
+        let cx = 200 + colW * CGFloat(i)
+        if let img = symbol(f.0, size: 60, color: dim(0.8)) {
+            img.draw(in: NSRect(x: cx + colW / 2 - img.size.width / 2, y: 300,
+                                width: img.size.width, height: img.size.height))
+        }
+        text(f.1, font(42, .medium), dim(0.8), x: cx + 40, y: 150, width: colW - 80, align: .center)
+    }
+}
+write(aiShot, "02-ai-usage-2880x1800.png")
+
+// MARK: - 3. Preferences
 
 let prefs = patchedPrefs(load("prefs.png"))
 
@@ -373,12 +459,12 @@ let prefsShot = canvas {
     clip.lineWidth = 2
     clip.stroke()
 
-    text("Rules, gradients, fonts, hotkeys, notifications",
+    text("Presets for AI, battery, calendar, CPU, prices, and your own scripts",
          font(72, .semibold), white, x: 200, y: 140, width: W - 400, align: .center)
 }
-write(prefsShot, "02-preferences-2880x1800.png")
+write(prefsShot, "03-preferences-2880x1800.png")
 
-// MARK: - 3. Menu + recipes
+// MARK: - 4. Menu + recipes
 
 let menuRows: [(String, Bool, Bool)] = [      // title, isHeader/dimmed, hasCheck
     ("Updated: today 14:05", true, false),
@@ -386,7 +472,7 @@ let menuRows: [(String, Bool, Bool)] = [      // title, isHeader/dimmed, hasChec
     ("Refresh", false, false),
     ("Refresh All", false, false),
     ("SEPARATOR", false, false),
-    ("Edit “BTC 3 digits + CPU/RAM dots”…", false, false),
+    ("Edit “AI Usage Icon (Claude)”…", false, false),
     ("Preferences…", false, false),
     ("Launch at Login", false, true),
     ("About DotBar", false, false),
@@ -395,7 +481,7 @@ let menuRows: [(String, Bool, Bool)] = [      // title, isHeader/dimmed, hasChec
 
 let menuShot = canvas {
     text("Click an item for its menu", font(58, .semibold), white, x: 200, y: H - 210)
-    text("Ready-made recipes", font(58, .semibold), white, x: 1700, y: H - 210)
+    text("\(recipeNames.count) ready-made presets", font(58, .semibold), white, x: 1700, y: H - 210)
 
     // Small menu bar strip at the top of the left column.
     menuBar(rect: NSRect(x: 200, y: H - 430, width: 1320, height: 150), itemHeight: 62, radius: 30, compact: true)
@@ -437,19 +523,20 @@ let menuShot = canvas {
         }
     }
 
-    // Right column: the recipe list.
+    // Right side: the preset list in two columns.
     let colors = [rgb(52, 199, 89), rgb(255, 159, 10), rgb(255, 69, 58),
                   rgb(100, 210, 255), rgb(191, 90, 242), rgb(255, 214, 10)]
-    var ry: CGFloat = H - 330
+    let perCol = (recipeNames.count + 1) / 2
     for (i, name) in recipeNames.enumerated() {
-        let d: CGFloat = 22
+        let colX: CGFloat = i < perCol ? 1700 : 2280
+        let ry = H - 320 - CGFloat(i % perCol) * 66
+        let d: CGFloat = 18
         colors[i % colors.count].setFill()
-        NSBezierPath(ovalIn: NSRect(x: 1700, y: ry + 16, width: d, height: d)).fill()
-        text(name, font(46, .regular), dim(0.88), x: 1700 + d + 26, y: ry)
-        ry -= 76
+        NSBezierPath(ovalIn: NSRect(x: colX, y: ry + 14, width: d, height: d)).fill()
+        text(name, font(36, .regular), dim(0.88), x: colX + d + 20, y: ry)
     }
 
     text("xbar-compatible output · streaming scripts · Homebrew or App Store",
          font(56, .semibold), white, x: 200, y: 120, width: W - 400, align: .center)
 }
-write(menuShot, "03-menu-recipes-2880x1800.png")
+write(menuShot, "04-menu-recipes-2880x1800.png")
