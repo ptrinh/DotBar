@@ -44,7 +44,7 @@ See [Recipes.md](Recipes.md) for scripts and the full output syntax.
 brew install --cask ptrinh/tap/dotbar
 ```
 
-Or download the notarized zip from [Releases](https://github.com/ptrinh/DotBar/releases). macOS 14+.
+Or download the notarized app: [DotBar-MacOS.zip](https://github.com/ptrinh/DotBar/releases/download/latest/DotBar-MacOS.zip) (always the newest; older versions in [Releases](https://github.com/ptrinh/DotBar/releases)). macOS 14+.
 
 ## Command line and AI agents
 

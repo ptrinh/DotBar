@@ -55,6 +55,16 @@ git tag -f "v$VERSION" && git push -q origin main --tags
 gh release create "v$VERSION" "$ZIP" --repo "$REPO" --title "DotBar $VERSION" --generate-notes 2>/dev/null \
   || gh release upload "v$VERSION" "$ZIP" --repo "$REPO" --clobber
 
+# Fixed download links: .../releases/download/latest/DotBar-MacOS.zip (a "latest" pre-release whose
+# tag follows main) and .../releases/latest/download/DotBar-MacOS.zip (GitHub's latest-release alias).
+FIXED="$OUT/DotBar-MacOS.zip"; cp "$ZIP" "$FIXED"
+gh release upload "v$VERSION" "$FIXED" --repo "$REPO" --clobber
+git tag -f latest && git push -q -f origin latest
+gh release view latest --repo "$REPO" >/dev/null 2>&1 \
+  || gh release create latest --repo "$REPO" --prerelease --title "Latest build" \
+       --notes "Always the newest DotBar: https://github.com/$REPO/releases/download/latest/DotBar-MacOS.zip"
+gh release upload latest "$FIXED" --repo "$REPO" --clobber
+
 echo "==> Homebrew cask"
 [[ -d "$TAP_DIR/.git" ]] || git clone -q "https://github.com/ptrinh/homebrew-tap.git" "$TAP_DIR"
 ( cd "$TAP_DIR" && git pull -q --rebase )
