@@ -71,6 +71,8 @@ enum Recipes {
                      source: .script(command: #"lp=$(pmset -g | awk '/lowpowermode/{print $2}'); pmset -g batt | awk -F'\t' -v lp="$lp" '/AC Power/{ac=1} /InternalBattery/{split($2,a,"; "); p=a[1]+0; s=a[2]; t=a[3]; sub(/ *present.*/,"",t); c=(s=="charging"||s=="finishing charge")?":charging":(ac?":plugged":""); if (lp==1) c=c ":lowpower"; m="\"" p "% — " s "\""; if (t!="" && t !~ /^0:00/ && t !~ /no estimate/) m=m ",\"" t "\""; if (lp==1) m=m ",\"Low Power Mode on\""; printf "{\"text\":\"\",\"symbol\":\"battery:%d%s\",\"menu\":[%s]}\n", p, c, m}'"#, refreshSeconds: 60))
         i.hideWhenEmpty = true
         i.paddingLeft = 0; i.paddingRight = 0
+        // Health details only when the menu opens (cached, refreshed in the background).
+        i.menuCommand = #"ioreg -rn AppleSmartBattery | awk '/"CycleCount" =/{cc=$NF} /"ExternalConnected" =/{ext=$NF} /"IsCharging" =/{chg=$NF} /"FullyCharged" =/{full=$NF} /"BatteryData" =/{ if (match($0, /"DesignCapacity"=[0-9]+/)) d=substr($0, RSTART+17, RLENGTH-17); if (match($0, /"NominalChargeCapacity"=[0-9]+/)) n=substr($0, RSTART+24, RLENGTH-24) } END{ if (cc == "") exit; if (d > 0) { h=int(n*100/d+0.5); printf "Maximum capacity: %d%%%s\n", h, (h < 80 ? " — Service Recommended" : "") } printf "Cycle count: %d\n", cc; if (ext == "Yes" && chg == "No" && full == "No") print "Charging on hold" }'"#
         return i
     }
 
@@ -119,6 +121,8 @@ enum Recipes {
         let cmd = #"curl -s --max-time 8 https://api.coinbase.com/v2/prices/BTC-USD/spot | sed -E 's/.*"amount":"([0-9]+)[."].*/\1/' | cut -c1-3"#
         var i = Item(name: "BTC 3 digits", source: .script(command: cmd, refreshSeconds: 60))
         i.font.monospacedDigits = true
+        // Menu: full price and the 24h change in $ and %, fetched only when the menu opens.
+        i.menuCommand = #"curl -s --max-time 8 https://api.exchange.coinbase.com/products/BTC-USD/stats | tr ',' '\n' | sed -nE 's/.*"(open|last)":"([0-9.]+)".*/\1 \2/p' | awk 'function fmt(v,  s,ip,fp,out){ s=sprintf("%.2f", v); ip=substr(s, 1, index(s, ".")-1); fp=substr(s, index(s, ".")); out=""; while (length(ip) > 3) { out="," substr(ip, length(ip)-2) out; ip=substr(ip, 1, length(ip)-3) } return ip out fp } {v[$1]=$2} END{ if (v["last"] == "" || v["open"] == 0) { print "—"; exit } d=v["last"]-v["open"]; p=d*100/v["open"]; printf "BTC/USD  $%s\n", fmt(v["last"]); printf "24h  %s $%s  (%s%.2f%%) | color=%s\n", (d >= 0 ? "▲" : "▼"), fmt(d < 0 ? -d : d), (d >= 0 ? "+" : "−"), (p < 0 ? -p : p), (d >= 0 ? "green" : "red") }'"#
         return i
     }
 

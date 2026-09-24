@@ -56,6 +56,16 @@ struct ItemEditorView: View {
                 }
             }
 
+            Section("Menu details") {
+                LabeledContent {
+                    TextField("", text: $item.menuCommand, prompt: Text("optional"), axis: .vertical)
+                        .labelsHidden().lineLimit(1...4)
+                        .font(.system(.body, design: .monospaced))
+                } label: { Text("Command").fixedSize() }
+                Text("Extra menu lines for costly details. Runs at launch and each time the menu opens: the menu shows the last result at once and updates it when the run finishes.")
+                    .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             Section("Text style") {
                 FontPicker(spec: $item.font)
                 LabeledContent("SF Symbol") {

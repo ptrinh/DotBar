@@ -75,6 +75,13 @@ codes stripped).
 **Submenus:** a menu line starting with `--` nests under the previous line; `----` nests one level
 deeper, and so on. A line of `---` is a separator; `-----` is a separator inside a submenu.
 
+### Menu details (on demand)
+
+**Menu details → Command** adds menu lines from a separate command that runs only at launch and
+each time the menu opens. The menu shows the last result immediately and swaps in the fresh
+lines when the run finishes, so costly details (health, long lists, API calls) never run on the
+refresh timer. Same line syntax as menu lines (`| key=value`, `--` submenus, `---`).
+
 ### Sparkline
 
 **Display → Sparkline** keeps the last 10–60 values of the item's first number (in memory
@@ -143,6 +150,11 @@ a battery the command prints nothing, so only the two dots show.
 ```sh
 lp=$(pmset -g | awk '/lowpowermode/{print $2}'); pmset -g batt | awk -F'\t' -v lp="$lp" '/AC Power/{ac=1} /InternalBattery/{split($2,a,"; "); p=a[1]+0; s=a[2]; t=a[3]; sub(/ *present.*/,"",t); c=(s=="charging"||s=="finishing charge")?":charging":(ac?":plugged":""); if (lp==1) c=c ":lowpower"; m="\"" p "% — " s "\""; if (t!="" && t !~ /^0:00/ && t !~ /no estimate/) m=m ",\"" t "\""; if (lp==1) m=m ",\"Low Power Mode on\""; printf "{\"text\":\"\",\"symbol\":\"battery:%d%s\",\"menu\":[%s]}\n", p, c, m}'
 ```
+Menu details (on demand): maximum capacity (with *Service Recommended* below 80 %), cycle count,
+and *Charging on hold* when on power but not charging:
+```sh
+ioreg -rn AppleSmartBattery | awk '/"CycleCount" =/{cc=$NF} /"ExternalConnected" =/{ext=$NF} /"IsCharging" =/{chg=$NF} /"FullyCharged" =/{full=$NF} /"BatteryData" =/{ if (match($0, /"DesignCapacity"=[0-9]+/)) d=substr($0, RSTART+17, RLENGTH-17); if (match($0, /"NominalChargeCapacity"=[0-9]+/)) n=substr($0, RSTART+24, RLENGTH-24) } END{ if (cc == "") exit; if (d > 0) { h=int(n*100/d+0.5); printf "Maximum capacity: %d%%%s\n", h, (h < 80 ? " — Service Recommended" : "") } printf "Cycle count: %d\n", cc; if (ext == "Yes" && chg == "No" && full == "No") print "Charging on hold" }'
+```
 Dot 1 fades from transparent (≤40 %) to red (100 %) with CPU, dot 2 from transparent (≤50 %) to yellow with RAM. Uses the **Gradient** color mode: pick "Gradient", set the value range (40 → 100 / 50 → 100) and the two end colors; alpha is interpolated, so a `#RRGGBB00` start fades in.
 ```sh
 # dot 1 (own script, every 10s)
@@ -154,6 +166,10 @@ iostat -c 2 -w 1 | tail -1 | awk '{printf "%.0f", 100 - $(NF-3)}'
 Only the first three digits of the price (`80574` → `805`). Compact, no `jq`.
 ```sh
 curl -s --max-time 8 https://api.coinbase.com/v2/prices/BTC-USD/spot | sed -E 's/.*"amount":"([0-9]+)[."].*/\1/' | cut -c1-3
+```
+Menu details (on demand): full BTC/USD price and the 24h change in $ and %, green or red.
+```sh
+curl -s --max-time 8 https://api.exchange.coinbase.com/products/BTC-USD/stats | tr ',' '\n' | sed -nE 's/.*"(open|last)":"([0-9.]+)".*/\1 \2/p' | awk 'function fmt(v,  s,ip,fp,out){ s=sprintf("%.2f", v); ip=substr(s, 1, index(s, ".")-1); fp=substr(s, index(s, ".")); out=""; while (length(ip) > 3) { out="," substr(ip, length(ip)-2) out; ip=substr(ip, 1, length(ip)-3) } return ip out fp } {v[$1]=$2} END{ if (v["last"] == "" || v["open"] == 0) { print "—"; exit } d=v["last"]-v["open"]; p=d*100/v["open"]; printf "BTC/USD  $%s\n", fmt(v["last"]); printf "24h  %s $%s  (%s%.2f%%) | color=%s\n", (d >= 0 ? "▲" : "▼"), fmt(d < 0 ? -d : d), (d >= 0 ? "+" : "−"), (p < 0 ? -p : p), (d >= 0 ? "green" : "red") }'
 ```
 
 ### Disk Free % — every 300s

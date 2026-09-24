@@ -10,6 +10,9 @@ final class AppState: ObservableObject {
     private(set) var outputs: [UUID: ScriptOutput] = [:] { didSet { live.objectWillChange.send() } }
     /// Sparkline samples per item, in memory only.
     private var history: [UUID: [Double]] = [:]
+    /// Last output lines of each item's `menuCommand` (stale-while-revalidate cache, memory only).
+    private(set) var menuDetails: [UUID: [String]] = [:]
+    private var menuDetailsInFlight: Set<UUID> = []
     private(set) var dotOutputs: [UUID: ScriptOutput] = [:] { didSet { live.objectWillChange.send() } }
     let live = LiveOutputs()
     final class LiveOutputs: ObservableObject {}
@@ -72,6 +75,27 @@ final class AppState: ObservableObject {
         startWatchingFiles()
         isStarting = false
         staggeredRefreshAll()
+        for item in items where item.enabled && !item.menuCommand.isEmpty { refreshMenuDetails(item) }
+    }
+
+    /// Runs the item's `menuCommand` in the background and caches its lines; `done` gets the
+    /// fresh lines on the main actor. A run already in flight is not stacked.
+    func refreshMenuDetails(_ item: Item, done: (([String]) -> Void)? = nil) {
+        let id = item.id, cmd = item.menuCommand
+        guard !cmd.isEmpty, !menuDetailsInFlight.contains(id) else { return }
+        menuDetailsInFlight.insert(id)
+        let env = scriptEnv(for: item)
+        Task.detached(priority: .utility) { [weak self] in
+            let out = await ScriptRunner.run(cmd, timeout: 10, extra: env)
+            var lines = out.raw.components(separatedBy: .newlines)
+            while let last = lines.last, last.trimmingCharacters(in: .whitespaces).isEmpty { lines.removeLast() }
+            await MainActor.run {
+                guard let self else { return }
+                self.menuDetailsInFlight.remove(id)
+                self.menuDetails[id] = lines
+                done?(lines)
+            }
+        }
     }
 
     /// Launch-time refresh: item N starts N * 0.7s in (capped at 5s) so we don't fork every script at once.

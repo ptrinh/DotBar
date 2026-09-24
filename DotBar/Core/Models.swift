@@ -38,6 +38,9 @@ struct Item: Identifiable, Codable, Hashable {
     /// Sparkline of the last N values of the item's number, drawn before the text. 0 = off.
     /// History lives in memory only.
     var sparkline: Int = 0
+    /// Command for extra menu lines, run only at launch and when the menu opens: the menu shows
+    /// the cached lines at once and swaps in fresh ones when the run finishes. Empty = none.
+    var menuCommand: String = ""
 
     /// 0 for static text and for streams — a stream pushes updates itself, so it has no timer.
     var refreshSeconds: Int {
@@ -75,7 +78,7 @@ struct Item: Identifiable, Codable, Hashable {
         case id, name, enabled, source, font, textColor, dots, dotsPosition, action, symbol, maxWidth, notify, hotkey
         case hideWhenEmpty
         case altAction, middleAction, displayMode, dotStyle, dotSize
-        case showInBar, paddingLeft, paddingRight, sparkline
+        case showInBar, paddingLeft, paddingRight, sparkline, menuCommand
     }
 
     /// Everything is optional with a default so older items.json files keep loading.
@@ -104,6 +107,7 @@ struct Item: Identifiable, Codable, Hashable {
         paddingLeft = try c.decodeIfPresent(Double.self, forKey: .paddingLeft) ?? 2
         paddingRight = try c.decodeIfPresent(Double.self, forKey: .paddingRight) ?? 2
         sparkline = try c.decodeIfPresent(Int.self, forKey: .sparkline) ?? 0
+        menuCommand = try c.decodeIfPresent(String.self, forKey: .menuCommand) ?? ""
     }
 }
 

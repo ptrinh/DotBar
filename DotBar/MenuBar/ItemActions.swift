@@ -91,10 +91,49 @@ final class ItemActions: NSObject {
         }
     }
 
+    /// The menu while it is open, and the rows that came from `menuCommand`, so a fresh run can
+    /// replace them in place.
+    private weak var openMenu: NSMenu?
+    private var detailItems: [NSMenuItem] = []
+
     func showMenu() {
-        statusItem.menu = buildMenu()
-        statusItem.button?.performClick(nil)
+        let menu = buildMenu()
+        openMenu = menu
+        // Cached details are already in the menu; refresh them while it is open.
+        if let item = state.binding(for: itemID) {
+            state.refreshMenuDetails(item) { [weak self, weak menu] lines in
+                guard let self, let menu, self.openMenu === menu else { return }
+                self.replaceDetails(in: menu, with: lines)
+            }
+        }
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)            // returns when the menu closes
         statusItem.menu = nil
+        openMenu = nil
+    }
+
+    private func replaceDetails(in menu: NSMenu, with lines: [String]) {
+        guard let first = detailItems.first, let at = menu.items.firstIndex(of: first) else { return }
+        detailItems.forEach(menu.removeItem)
+        let fresh = detailRows(lines)
+        for (k, mi) in fresh.enumerated() { menu.insertItem(mi, at: at + k) }
+        detailItems = fresh
+    }
+
+    /// Rows for `menuCommand` output (same xbar line syntax as menu lines). Never empty, so
+    /// the block keeps a position to be replaced at.
+    private func detailRows(_ lines: [String]?) -> [NSMenuItem] {
+        let tmp = NSMenu()
+        tmp.autoenablesItems = false
+        if let lines, !lines.isEmpty { appendLines(lines, to: tmp) }
+        if tmp.items.isEmpty {
+            let mi = NSMenuItem(title: lines == nil ? "Loading…" : "—", action: nil, keyEquivalent: "")
+            mi.isEnabled = false
+            tmp.addItem(mi)
+        }
+        let rows = tmp.items
+        tmp.removeAllItems()
+        return rows
     }
 
     private func copyOutput() {
@@ -113,10 +152,16 @@ final class ItemActions: NSObject {
         let menu = NSMenu()
         menu.autoenablesItems = false
         guard let item = state.binding(for: itemID) else { return menu }
+        detailItems = []
         if let out = state.output(for: item) {
             // Extra output lines first, TextBar style: click one to copy it.
             if !out.menuLines.isEmpty {
                 appendLines(out.menuLines, to: menu)
+                menu.addItem(.separator())
+            }
+            if !item.menuCommand.isEmpty {
+                detailItems = detailRows(state.menuDetails[item.id])
+                detailItems.forEach(menu.addItem)
                 menu.addItem(.separator())
             }
             let df = Self.updatedFormatter

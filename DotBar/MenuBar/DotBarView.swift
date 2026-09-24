@@ -402,7 +402,7 @@ final class DotBarView: NSView {
             // (the macOS 26 look) so it reads over the fill and past the outline alike.
             let glyph: NSBezierPath
             if charging {
-                let gh = px(body.height * 0.82), gw = px(gh * 0.6)
+                let gh = px(body.height * 0.68), gw = px(gh * 0.6)
                 glyph = boltPath(in: NSRect(x: px((w - gw) / 2), y: px(body.midY - gh / 2), width: gw, height: gh))
             } else {
                 let gw = w + 2 * mx - 1, gh = px(gw * 0.62)
@@ -411,8 +411,9 @@ final class DotBarView: NSView {
             ctx.saveGState()
             ctx.setBlendMode(.clear)
             glyph.lineWidth = 1.5; glyph.lineJoinStyle = .round; glyph.stroke()
+            glyph.fill()                                             // so a translucent glyph isn't tinted by the fill
             ctx.restoreGState()
-            color.setFill(); glyph.fill()
+            color.withAlphaComponent(charging ? 0.5 : 1).setFill(); glyph.fill()
             return true
         }
         let att = NSTextAttachment()
