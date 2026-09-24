@@ -65,7 +65,7 @@ cask "dotbar" do
 
   url "https://github.com/ptrinh/DotBar/releases/download/v#{version}/DotBar-#{version}.zip"
   name "DotBar"
-  desc "Custom text and colored status dots for the macOS menu bar"
+  desc "Claude & Codex usage, system stats and your own scripts in the menu bar"
   homepage "https://github.com/ptrinh/DotBar"
 
   depends_on macos: :sonoma

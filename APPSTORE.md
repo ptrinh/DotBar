@@ -4,12 +4,12 @@ Bundle ID `uk.trinh.DotBar` is registered; provisioning profile "DotBar Mac App 
 Build: `scripts/appstore.sh <version> export` (pkg in dist/appstore) or `scripts/appstore.sh <version> upload`.
 
 ## One-time, in App Store Connect (web only, no API)
-1. My Apps → + → New App: platform macOS, name **DotBar: Menu Bar Stats**, primary language English, bundle ID uk.trinh.DotBar, SKU `dotbar-mac`.
+1. My Apps → + → New App: platform macOS, name **DotBar: AI Stats Menu**, primary language English, bundle ID uk.trinh.DotBar, SKU `dotbar-mac`.
 2. Then `scripts/appstore.sh <version> upload` pushes the build.
 
 ## Metadata draft
-- **Name**: DotBar: Menu Bar Stats
-- **Subtitle**: Custom text, scripts & dots
+- **Name**: DotBar: AI Stats Menu
+- **Subtitle**: System stats, scripts & dots
 - **Category**: Utilities
 - **Price**: Free (or your choice)
 - **Privacy policy URL**: https://github.com/ptrinh/DotBar/blob/main/PRIVACY.md

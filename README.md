@@ -1,6 +1,8 @@
 # DotBar
 
-Custom text and status dots for the macOS menu bar. Minimal by design: ~600 KB binary, ~14 MB RAM idle, near-zero CPU.
+**Claude & Codex usage, system stats and your own scripts in the macOS menu bar.** Two tiny bars show
+your AI session and weekly limits at a glance; everything else is text, colored status dots and small
+icons from any shell command. Minimal by design: ~600 KB binary, ~18 MB RAM idle, near-zero CPU.
 
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black) ![Swift](https://img.shields.io/badge/Swift-5.10-orange) ![No dependencies](https://img.shields.io/badge/dependencies-0-green)
 
@@ -16,6 +18,8 @@ https://github.com/user-attachments/assets/c993caa5-b90e-471b-bb1d-4a52682bb75c
 
 ## What it does
 
+- **AI usage at a glance**: Claude (via Claude Code's sign-in) or Codex (via Codex CLI's) session and weekly usage as two bars, with % and reset times on click. Added automatically on first launch when a sign-in is found.
+- **Built-in presets**: battery (macOS 27 style, with health and top processes), calendar with a month popover and your events, CPU / RAM with sparklines, network, crypto and FX prices, weather, Pomodoro, Now Playing, and more.
 - Show **static text** or the **output of a shell script** on an interval, or a **streaming** script that keeps running.
 - **1–3 colored dots** stacked vertically next to the text. Colors follow rules you define: number range, regex, contains, equals, empty, script failed.
 - **Font, size, weight, color** per item. Text color can also follow rules.
