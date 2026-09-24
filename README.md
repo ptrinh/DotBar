@@ -6,9 +6,13 @@ Custom text and status dots for the macOS menu bar. Minimal by design: ~600 KB b
 
 ![DotBar in the menu bar](docs/screenshots/hero.png)
 
+https://github.com/user-attachments/assets/3437d50c-01ea-4ff2-884e-70ff9e2a9ce8
+
 | Preferences | Menu and recipes |
 |---|---|
 | ![Preferences](docs/screenshots/preferences.png) | ![Menu and recipes](docs/screenshots/menu-recipes.png) |
+
+![Preferences with the built-in presets](docs/screenshots/presets.png)
 
 ## What it does
 
