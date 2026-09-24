@@ -71,6 +71,7 @@ cask "dotbar" do
   depends_on macos: :sonoma
 
   app "DotBar.app"
+  binary "#{appdir}/DotBar.app/Contents/MacOS/DotBar", target: "dotbar"
 
   zap trash: [
     "~/Library/Application Support/DotBar",

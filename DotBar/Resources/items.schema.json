@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ptrinh/DotBar/blob/main/DotBar/Resources/items.schema.json",
+  "title": "DotBar items.json",
+  "description": "Array of menu bar items, in bar order. Every field except the ones marked required has a default, so partial items load. Swift Codable enums are encoded as a single-key object: {\"case\": {associated values}}; a case without values is {\"case\": {}}. Unnamed associated values use the key \"_0\".",
+  "type": "array",
+  "items": { "$ref": "#/$defs/Item" },
+  "$defs": {
+    "Hex": {
+      "type": "string",
+      "pattern": "^#?([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$",
+      "description": "#RGB, #RRGGBB or #RRGGBBAA (the # is optional)."
+    },
+    "Item": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "format": "uuid", "description": "Stable identity; also keys the status item's saved bar position. Omit when adding (the dotbar CLI assigns one)." },
+        "name": { "type": "string", "default": "New Item" },
+        "enabled": { "type": "boolean", "default": true },
+        "source": { "$ref": "#/$defs/Source" },
+        "font": { "$ref": "#/$defs/FontSpec" },
+        "textColor": { "$ref": "#/$defs/ColorSpec", "description": "Colour of the bar text. {\"fixed\": {}} = system label colour." },
+        "dots": { "type": "array", "maxItems": 3, "items": { "$ref": "#/$defs/Dot" }, "default": [] },
+        "dotsPosition": { "enum": ["leading", "trailing"], "default": "trailing" },
+        "dotStyle": { "enum": ["circle", "square", "bar"], "default": "circle" },
+        "dotSize": { "type": "number", "minimum": 3, "maximum": 20, "default": 6 },
+        "displayMode": { "enum": ["textAndDots", "dotsOnly", "textOnly", "symbolOnly"], "default": "textAndDots" },
+        "symbol": { "type": ["string", "null"], "description": "SF Symbol name drawn before the text; a JSON \"symbol\" in the output wins." },
+        "maxWidth": { "type": "number", "minimum": 0, "default": 0, "description": "Points; 0 = unlimited (tail ellipsis when capped)." },
+        "sparkline": { "type": "integer", "enum": [0, 10, 20, 30, 60], "default": 0, "description": "Last N values of the output's first number drawn before the text; 0 = off. Memory only." },
+        "menuCommand": { "type": "string", "default": "", "description": "Extra menu lines from a command run only at launch and whenever the menu opens (cached; the open menu is updated in place). Same line syntax as menu lines." },
+        "action": { "$ref": "#/$defs/ClickAction", "description": "Left click." },
+        "altAction": { "$ref": "#/$defs/ClickAction", "description": "Option + left click." },
+        "middleAction": { "$ref": "#/$defs/ClickAction", "description": "Middle click. Right click is always the menu." },
+        "notify": { "enum": ["off", "onTextChange", "onDotColorChange", "onAnyChange"], "default": "off" },
+        "hotkey": {
+          "type": ["object", "null"],
+          "properties": { "keyCode": { "type": "integer" }, "modifiers": { "type": "integer", "description": "Carbon modifier mask (cmdKey 256, shiftKey 512, optionKey 2048, controlKey 4096)." } },
+          "required": ["keyCode", "modifiers"]
+        },
+        "hideWhenEmpty": { "type": "boolean", "default": false, "description": "Hide while the output has no text, no dot override and no symbol." },
+        "showInBar": { "type": "boolean", "default": true, "description": "false = no status item; listed inside the other items' menus." },
+        "paddingLeft": { "type": "number", "minimum": 0, "maximum": 20, "default": 2 },
+        "paddingRight": { "type": "number", "minimum": 0, "maximum": 20, "default": 2 }
+      }
+    },
+    "Source": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["static"],
+          "properties": { "static": { "type": "object", "required": ["text"], "properties": { "text": { "type": "string" } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["script"],
+          "properties": { "script": { "type": "object", "required": ["command", "refreshSeconds"],
+            "properties": {
+              "command": { "type": "string", "description": "Run with /bin/zsh -c. Output: plain text (first line = bar, rest = menu, xbar params) or a JSON object." },
+              "refreshSeconds": { "type": "integer", "minimum": 0, "description": "0 = manual only." } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["stream"],
+          "properties": { "stream": { "type": "object", "required": ["command"],
+            "properties": { "command": { "type": "string", "description": "Long-lived process; a line of ~~~ ends each update block." } } } } }
+      ]
+    },
+    "ClickAction": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["menu"], "properties": { "menu": { "type": "object", "maxProperties": 0 } } },
+        { "type": "object", "additionalProperties": false, "required": ["copy"], "properties": { "copy": { "type": "object", "maxProperties": 0 } } },
+        { "type": "object", "additionalProperties": false, "required": ["calendar"], "properties": { "calendar": { "type": "object", "maxProperties": 0 } }, "description": "Month calendar popover with the day's events." },
+        { "type": "object", "additionalProperties": false, "required": ["script"],
+          "properties": { "script": { "type": "object", "required": ["command"], "properties": { "command": { "type": "string" } } } },
+          "description": "Runs the command, then refreshes the item." },
+        { "type": "object", "additionalProperties": false, "required": ["openURL"],
+          "properties": { "openURL": { "type": "object", "required": ["url"], "properties": { "url": { "type": "string" } } } } }
+      ]
+    },
+    "FontSpec": {
+      "type": "object",
+      "properties": {
+        "family": { "type": ["string", "null"], "description": "Font family; omit / null = system font." },
+        "size": { "type": "number", "minimum": 8, "maximum": 20, "default": 13 },
+        "weight": { "enum": ["light", "regular", "medium", "semibold", "bold"], "default": "regular" },
+        "monospacedDigits": { "type": "boolean", "default": true }
+      }
+    },
+    "ColorSpec": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["fixed"],
+          "properties": { "fixed": { "type": "object", "properties": { "_0": { "$ref": "#/$defs/Hex" } }, "description": "{} = system label colour." } } },
+        { "type": "object", "additionalProperties": false, "required": ["rules"],
+          "properties": { "rules": { "type": "object", "required": ["_0"],
+            "properties": {
+              "_0": { "type": "array", "items": { "$ref": "#/$defs/Rule" }, "description": "First matching rule wins." },
+              "fallback": { "$ref": "#/$defs/Hex" } } } } },
+        { "type": "object", "additionalProperties": false, "required": ["gradient"],
+          "properties": { "gradient": { "type": "object", "required": ["min", "max", "from", "to"],
+            "properties": {
+              "min": { "type": "number" }, "max": { "type": "number" },
+              "from": { "$ref": "#/$defs/Hex" }, "to": { "$ref": "#/$defs/Hex" } },
+            "description": "Interpolates from → to as the number goes min → max; alpha too, so #RRGGBB00 fades in." } } }
+      ]
+    },
+    "Rule": {
+      "type": "object",
+      "required": ["condition", "color"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "condition": { "$ref": "#/$defs/Condition" },
+        "color": { "$ref": "#/$defs/Hex" }
+      }
+    },
+    "Condition": {
+      "oneOf": [
+        { "type": "object", "required": ["numberInRange"], "properties": { "numberInRange": { "type": "object",
+          "properties": { "min": { "type": "number" }, "max": { "type": "number" } },
+          "description": "min ≤ n < max on the output's first number; omit a bound for open-ended." } } },
+        { "type": "object", "required": ["regex"], "properties": { "regex": { "type": "object", "required": ["pattern"], "properties": { "pattern": { "type": "string" } } } } },
+        { "type": "object", "required": ["contains"], "properties": { "contains": { "type": "object", "required": ["text"], "properties": { "text": { "type": "string" } } } } },
+        { "type": "object", "required": ["equals"], "properties": { "equals": { "type": "object", "required": ["text"], "properties": { "text": { "type": "string" } } } } },
+        { "type": "object", "required": ["isEmpty"], "properties": { "isEmpty": { "type": "object", "maxProperties": 0 } } },
+        { "type": "object", "required": ["scriptFailed"], "properties": { "scriptFailed": { "type": "object", "maxProperties": 0 } } }
+      ]
+    },
+    "Dot": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "source": { "$ref": "#/$defs/DotSource" },
+        "color": { "$ref": "#/$defs/ColorSpec" },
+        "label": { "type": "string", "maxLength": 1, "default": "", "description": "Optional single character drawn left of the dot." }
+      }
+    },
+    "DotSource": {
+      "oneOf": [
+        { "type": "object", "required": ["mainValue"], "properties": { "mainValue": { "type": "object", "maxProperties": 0 } }, "description": "Colour from the item's own output." },
+        { "type": "object", "required": ["script"], "properties": { "script": { "type": "object", "required": ["command", "refreshSeconds"],
+          "properties": { "command": { "type": "string" }, "refreshSeconds": { "type": "integer", "minimum": 1 } } } }, "description": "The dot runs its own command." }
+      ]
+    }
+  }
+}

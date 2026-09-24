@@ -5,6 +5,7 @@ import AppKit
 @main
 struct DotBarMain {
     static func main() {
+        if let code = CLI.runIfInvoked() { exit(code) }      // `dotbar …` in a terminal: no menu bar app
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate

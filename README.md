@@ -6,7 +6,7 @@ Custom text and status dots for the macOS menu bar. Minimal by design: ~600 KB b
 
 ![DotBar in the menu bar](docs/screenshots/hero.png)
 
-https://github.com/user-attachments/assets/3437d50c-01ea-4ff2-884e-70ff9e2a9ce8
+https://github.com/user-attachments/assets/c993caa5-b90e-471b-bb1d-4a52682bb75c
 
 | Preferences | Menu and recipes |
 |---|---|
@@ -39,6 +39,25 @@ brew install --cask ptrinh/tap/dotbar
 ```
 
 Or download the notarized zip from [Releases](https://github.com/ptrinh/DotBar/releases). macOS 14+.
+
+## Command line and AI agents
+
+The cask also installs `dotbar`, a CLI for listing, adding and editing items. Writes are
+validated, backed up, and show up in the running app at once.
+
+```sh
+dotbar list
+dotbar add --recipe "CPU Usage"
+dotbar test 'echo "42% | color=orange"'     # how DotBar reads a command's output
+dotbar update "CPU Usage" --json '{"sparkline":30}'
+```
+
+Installed from the zip instead? `ln -s /Applications/DotBar.app/Contents/MacOS/DotBar /usr/local/bin/dotbar`.
+
+Point an AI coding agent (Claude Code, Cursor, …) at [`AGENTS.md`](AGENTS.md): it covers the
+CLI, the [JSON Schema](DotBar/Resources/items.schema.json) of `items.json`, the output syntax and
+how to keep commands cheap. Then ask it for the item you want, e.g. *"add a menu bar item with
+my open GitHub PRs"*.
 
 ## Build
 

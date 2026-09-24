@@ -1,0 +1,11 @@
+# DotBar
+
+> macOS menu bar app: custom text, colored status dots and small drawn icons from shell scripts.
+> Configure it with the `dotbar` CLI (validated writes, applied live) or by editing items.json.
+
+## Docs
+
+- [AGENTS.md](AGENTS.md): how an AI agent adds and edits items (CLI, schema, output syntax, cost rules)
+- [items.schema.json](DotBar/Resources/items.schema.json): JSON Schema of items.json (also `dotbar schema`)
+- [Recipes.md](Recipes.md): output syntax reference and working commands for every built-in preset
+- [README.md](README.md): features, install, build
