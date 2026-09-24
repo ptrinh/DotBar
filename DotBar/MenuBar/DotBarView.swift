@@ -240,6 +240,7 @@ final class DotBarView: NSView {
         if let name = symbolName, !name.isEmpty,
            let attachment = calendarAttachment(name, color: color, font: base)
                 ?? batteryAttachment(name, color: color, font: base)
+                ?? usageAttachment(name, color: color, font: base)
                 ?? symbolAttachment(name, color: color, font: base, scale: stacked ? 1.35 : 1) {
             if result.length > 0 { result.insert(NSAttributedString(string: " "), at: 0) }
             result.insert(attachment, at: 0)
@@ -419,6 +420,50 @@ final class DotBarView: NSView {
         let att = NSTextAttachment()
         att.image = img
         att.bounds = NSRect(x: 0, y: round((base.capHeight - h) / 2), width: size.width, height: h)
+        return NSAttributedString(attachment: att)
+    }
+
+    /// `symbol: "usage:<top>:<bottom>[:<label>]"`: two parallel progress bars like "=" (e.g. AI
+    /// session and weekly usage, 0–100), with an optional small label above (e.g. "Claude").
+    /// Ink over a grey track; red from 90 %. Edges snapped to device pixels.
+    private static func usageAttachment(_ name: String, color: NSColor, font base: NSFont) -> NSAttributedString? {
+        guard name.hasPrefix("usage:") else { return nil }
+        var parts = name.dropFirst("usage:".count).split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        let label = parts.count > 1 && Double(parts.last!) == nil ? parts.removeLast() : ""
+        let values = parts.map { min(max(Double($0) ?? 0, 0), 100) }
+        guard !values.isEmpty else { return nil }
+        let lf = NSFont.systemFont(ofSize: round(base.pointSize * 0.55 * 2) / 2, weight: .semibold)
+        let labelStr = NSAttributedString(string: label, attributes: [.font: lf, .foregroundColor: color, .kern: 0.2])
+        let labelH: CGFloat = label.isEmpty ? 0 : ceil(lf.capHeight + max(0, -lf.descender))   // room for "Claude"'s cap and descender-free text
+        let labelGap: CGFloat = label.isEmpty ? 0 : 2
+        let barH: CGFloat = 3, gap: CGFloat = label.isEmpty ? 3 : 2.5
+        let w = max(round(base.pointSize * 1.25), ceil(labelStr.size().width))
+        let barsH = CGFloat(values.count) * barH + CGFloat(values.count - 1) * gap
+        let h = labelH + labelGap + barsH
+        let img = NSImage(size: NSSize(width: w, height: h), flipped: true) { _ in
+            let sc = max(1, NSGraphicsContext.current?.cgContext.userSpaceToDeviceSpaceTransform.a ?? 1)
+            func px(_ v: CGFloat) -> CGFloat { (v * sc).rounded() / sc }
+            if !label.isEmpty {
+                // Flipped: baseline sits capHeight below the top.
+                labelStr.draw(at: NSPoint(x: px((w - labelStr.size().width) / 2), y: px(lf.capHeight) - lf.ascender))
+            }
+            let top = labelH + labelGap
+            for (i, v) in values.enumerated() {
+                let bar = NSRect(x: 0, y: px(top + CGFloat(i) * (barH + gap)), width: w, height: barH)
+                let track = NSBezierPath(roundedRect: bar, xRadius: barH / 2, yRadius: barH / 2)
+                color.withAlphaComponent(0.35).setFill(); track.fill()
+                guard v > 0 else { continue }
+                NSGraphicsContext.saveGraphicsState()
+                track.addClip()
+                (v >= 90 ? NSColor.systemRed : color).setFill()
+                NSRect(x: 0, y: bar.minY, width: max(px(w * v / 100), barH), height: barH).fill()
+                NSGraphicsContext.restoreGraphicsState()
+            }
+            return true
+        }
+        let att = NSTextAttachment()
+        att.image = img
+        att.bounds = NSRect(x: 0, y: round((base.capHeight - h) / 2), width: w, height: h)
         return NSAttributedString(attachment: att)
     }
 

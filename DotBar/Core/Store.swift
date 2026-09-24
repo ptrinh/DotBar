@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 enum Store {
     static var directory: URL {
@@ -67,8 +68,38 @@ enum Store {
     static let decoder = JSONDecoder()
 
     /// First launch: battery icon with CPU/RAM dots, plus the calendar icon. On a Mac without a
-    /// battery the battery command prints nothing, so only the two dots show.
+    /// battery the battery command prints nothing, so only the two dots show. The AI usage icon
+    /// is added when a supported AI sign-in is found.
     static func defaults() -> [Item] {
-        [Recipes.batteryWithLoadDots, Recipes.calendarIcon]
+        var items = [Recipes.batteryWithLoadDots, Recipes.calendarIcon]
+        if let ai = detectedAIUsageItem() { items.append(ai) }
+        return items
+    }
+
+    /// First supported AI sign-in found, in priority order: Claude, then Codex (ChatGPT).
+    /// Gemini slots in here once it has a usage source.
+    private static func detectedAIUsageItem() -> Item? {
+        guard !Recipes.isSandboxed else { return nil }        // the recipes read other apps' sign-ins
+        if hasClaudeCodeSignIn { return Recipes.aiUsage }
+        if hasCodexSignIn { return Recipes.codexUsage }
+        return nil
+    }
+
+    /// Codex CLI signed in with ChatGPT (existence only; the token is not read here).
+    private static var hasCodexSignIn: Bool {
+        let file = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/auth.json")
+        return FileManager.default.fileExists(atPath: file.path)
+    }
+
+    /// Claude Code's sign-in exists (Keychain item or credentials file). Attributes only: the
+    /// secret is never read here, so no Keychain prompt.
+    private static var hasClaudeCodeSignIn: Bool {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrService as String: "Claude Code-credentials",
+                                    kSecReturnAttributes as String: true,
+                                    kSecMatchLimit as String: kSecMatchLimitOne]
+        if SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess { return true }
+        let file = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/.credentials.json")
+        return FileManager.default.fileExists(atPath: file.path)
     }
 }
