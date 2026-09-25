@@ -18,7 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = Self.makeMainMenu()
         AppState.shared.start()
-        if AppState.shared.items.isEmpty { PreferencesWindowController.shared.show() }
+        if Store.isFirstLaunch { OnboardingWindowController.shared.show() }
+        else if AppState.shared.items.isEmpty { PreferencesWindowController.shared.show() }
     }
 
     /// Quitting must not leave a streaming child process behind.

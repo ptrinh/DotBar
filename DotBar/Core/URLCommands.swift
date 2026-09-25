@@ -7,6 +7,7 @@ import AppKit
 ///     dotbar://set?name=Build&text=passing
 ///     dotbar://enable?name=Build&value=false
 ///     dotbar://prefs
+///     dotbar://welcome                        (the first-launch tour again)
 ///     dotbar://grant?what=codex               (App Store build: allow reading ~/.codex/auth.json)
 ///     dotbar://grant?what=claude              (App Store build: install the Claude Code usage hook)
 ///
@@ -41,6 +42,8 @@ enum URLCommands {
             state.update(item)
         case "prefs", "preferences":
             PreferencesWindowController.shared.show()
+        case "welcome":
+            OnboardingWindowController.shared.show()
         case "grant":
             if query["what"] == "codex" { grantCodexAccess() }
             if query["what"] == "claude" { setUpClaudeUsage() }

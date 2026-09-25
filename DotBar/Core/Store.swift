@@ -14,8 +14,11 @@ enum Store {
     /// read or wrote, so the file watcher can tell an external edit from our own save.
     private static var fingerprint: (hash: Int, modified: Date?) = (0, nil)
 
+    /// No items.json yet when this launch started: onboarding runs.
+    private(set) static var isFirstLaunch = false
+
     static func load() -> [Item] {
-        guard let data = try? Data(contentsOf: fileURL) else { return defaults() }
+        guard let data = try? Data(contentsOf: fileURL) else { isFirstLaunch = true; return defaults() }
         note(data)
         do { return try decoder.decode([Item].self, from: data) }
         catch { NSLog("DotBar: failed to decode items: \(error)"); return defaults() }
@@ -86,14 +89,14 @@ enum Store {
     }
 
     /// Codex CLI signed in with ChatGPT (existence only; the token is not read here).
-    private static var hasCodexSignIn: Bool {
+    static var hasCodexSignIn: Bool {
         let file = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/auth.json")
         return FileManager.default.fileExists(atPath: file.path)
     }
 
     /// Claude Code's sign-in exists (Keychain item or credentials file). Attributes only: the
     /// secret is never read here, so no Keychain prompt.
-    private static var hasClaudeCodeSignIn: Bool {
+    static var hasClaudeCodeSignIn: Bool {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                     kSecAttrService as String: "Claude Code-credentials",
                                     kSecReturnAttributes as String: true,
