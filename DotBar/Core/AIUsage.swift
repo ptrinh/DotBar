@@ -35,17 +35,35 @@ enum AIUsage {
     private static func claude() -> String {
         let sym = "usage:0:0:Claude"
         if Recipes.isSandboxed { return claudeFromHookFile(sym) }
+        // A fresh file from the Claude Code hook costs no request at all.
+        let hookFile = realHome.appendingPathComponent(".claude/\(claudeUsageFile)")
+        if let age = fileAge(hookFile), age < 180, let data = try? Data(contentsOf: hookFile),
+           let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any], number(j, "five_hour", "utilization") != nil {
+            return claudeReport(j, Fetched(json: j, age: age, retryIn: nil))
+        }
         guard let token = claudeToken() else { return notice(sym, "Sign in to Claude Code to see usage") }
         var req = URLRequest(url: URL(string: "https://api.anthropic.com/api/oauth/usage")!, timeoutInterval: 8)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        guard let j = fetch(req),
-              let s = number(j, "five_hour", "utilization"), let w = number(j, "seven_day", "utilization") else {
-            return notice(sym, "Usage unavailable — open Claude Code to refresh the sign-in")
+        switch cachedFetch("claude", req, valid: { number($0, "five_hour", "utilization") != nil }) {
+        case .success(let f): return claudeReport(f.json, f)
+        case .failure(let e):
+            // Rate-limited or offline: an older hook file (under a day) still beats no numbers.
+            if case .signIn = e {} else if let age = fileAge(hookFile), age < 86_400, let data = try? Data(contentsOf: hookFile),
+                      let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any], number(j, "five_hour", "utilization") != nil {
+                var retry: TimeInterval?
+                if case .limited(let r) = e { retry = r }
+                return claudeReport(j, Fetched(json: j, age: age, retryIn: retry))
+            }
+            return notice(sym, e.message(signIn: "open Claude Code to refresh the sign-in"))
         }
+    }
+
+    private static func claudeReport(_ j: [String: Any], _ f: Fetched) -> String {
+        let s = number(j, "five_hour", "utilization") ?? 0, w = number(j, "seven_day", "utilization") ?? 0
         let sessionLeft = (string(j, "five_hour", "resets_at").flatMap(isoDate)).map { $0.timeIntervalSinceNow }
         let weekly = string(j, "seven_day", "resets_at").flatMap(isoDate)
-        return report("Claude", s, w, sessionLeft, weekly, page: "https://claude.ai/settings/usage")
+        return report("Claude", s, w, sessionLeft, weekly, page: "https://claude.ai/settings/usage", note: f.note)
     }
 
     /// Sandbox: the Keychain item is out of reach, so a Claude Code `Stop` hook (installed once,
@@ -170,14 +188,17 @@ enum AIUsage {
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         if let account { req.setValue(account, forHTTPHeaderField: "ChatGPT-Account-Id") }
         req.setValue("codex_cli_rs", forHTTPHeaderField: "User-Agent")
-        guard let j = fetch(req),
-              let s = number(j, "rate_limit", "primary_window", "used_percent"),
-              let w = number(j, "rate_limit", "secondary_window", "used_percent") else {
-            return notice(sym, "Usage unavailable — run codex once to refresh the sign-in")
+        switch cachedFetch("codex", req, valid: { number($0, "rate_limit", "primary_window", "used_percent") != nil }) {
+        case .failure(let e): return notice(sym, e.message(signIn: "run codex once to refresh the sign-in"))
+        case .success(let f):
+            let j = f.json
+            let s = number(j, "rate_limit", "primary_window", "used_percent") ?? 0
+            let w = number(j, "rate_limit", "secondary_window", "used_percent") ?? 0
+            // From reset_at, not reset_after_seconds: the response may come from the cache.
+            let sessionLeft = number(j, "rate_limit", "primary_window", "reset_at").map { $0 - Date().timeIntervalSince1970 }
+            let weekly = number(j, "rate_limit", "secondary_window", "reset_at").map { Date(timeIntervalSince1970: $0) }
+            return report("Codex", s, w, sessionLeft, weekly, page: "https://chatgpt.com/codex/settings/usage", note: f.note)
         }
-        let sessionLeft = number(j, "rate_limit", "primary_window", "reset_after_seconds")
-        let weekly = number(j, "rate_limit", "secondary_window", "reset_at").map { Date(timeIntervalSince1970: $0) }
-        return report("Codex", s, w, sessionLeft, weekly, page: "https://chatgpt.com/codex/settings/usage")
     }
 
     /// Access token and account id from Codex CLI's auth.json (ChatGPT sign-in).
@@ -223,7 +244,7 @@ enum AIUsage {
         json(["text": "", "symbol": symbol, "menu": [enabled ? line : "\(line) | disabled=true"]])
     }
 
-    private static func ago(_ s: TimeInterval) -> String {
+    fileprivate static func ago(_ s: TimeInterval) -> String {
         let m = Int(s) / 60
         return m < 1 ? "just now" : m < 60 ? "\(m) min ago" : "\(m / 60)h \(m % 60)m ago"
     }
@@ -249,14 +270,80 @@ enum AIUsage {
 
     // MARK: Plumbing
 
-    /// Blocking fetch on the caller's (background) thread; nil on any HTTP or JSON error.
-    private static func fetch(_ req: URLRequest) -> [String: Any]? {
-        let done = DispatchSemaphore(value: 0)
-        var result: [String: Any]?
-        URLSession.shared.dataTask(with: req) { data, resp, _ in
-            if (resp as? HTTPURLResponse)?.statusCode == 200, let data {
-                result = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    // MARK: Cached fetch
+
+    /// A usage response and how old it is; `retryIn` when the endpoint is rate-limiting us.
+    struct Fetched {
+        let json: [String: Any], age: TimeInterval, retryIn: TimeInterval?
+        var note: String? {
+            if let r = retryIn { return "Updated \(AIUsage.ago(age)) · rate-limited, retrying in \(max(1, Int(r / 60))) min | disabled=true" }
+            return age >= 60 ? "Updated \(AIUsage.ago(age)) | disabled=true" : nil
+        }
+    }
+
+    enum FetchFailure: Error {
+        case signIn, limited(TimeInterval), unavailable
+        func message(signIn hint: String) -> String {
+            switch self {
+            case .signIn: return "Sign-in expired — \(hint)"
+            case .limited(let r): return "Usage is rate-limited — retrying in \(max(1, Int(r / 60))) min"
+            case .unavailable: return "Usage unavailable — check the connection"
             }
+        }
+    }
+
+    /// The usage endpoints rate-limit (HTTP 429 with Retry-After) when polled from several places
+    /// — the timer, menus, the CLI, the Claude Code hook. So: one response cached on disk and
+    /// shared by all of them; reused while under a minute old; no request at all until the
+    /// Retry-After has passed; the last good numbers keep showing meanwhile.
+    private static func cachedFetch(_ provider: String, _ req: URLRequest,
+                                    valid: ([String: Any]) -> Bool) -> Result<Fetched, FetchFailure> {
+        let url = Store.directory.appendingPathComponent("ai-usage-\(provider).json")
+        let now = Date().timeIntervalSince1970
+        var cache = (try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+        let body = cache["body"] as? [String: Any]
+        let age = now - ((cache["savedAt"] as? NSNumber)?.doubleValue ?? 0)
+        let retryUntil = (cache["retryUntil"] as? NSNumber)?.doubleValue ?? 0
+        func save() {
+            try? FileManager.default.createDirectory(at: Store.directory, withIntermediateDirectories: true)
+            if let d = try? JSONSerialization.data(withJSONObject: cache) { try? d.write(to: url, options: .atomic) }
+        }
+        if let body, age < 60 { return .success(Fetched(json: body, age: age, retryIn: nil)) }
+        if retryUntil > now {
+            return body.map { .success(Fetched(json: $0, age: age, retryIn: retryUntil - now)) } ?? .failure(.limited(retryUntil - now))
+        }
+        let (status, json, retryAfter) = fetch(req)
+        switch status {
+        case 200 where json.map(valid) == true:
+            cache = ["savedAt": now, "body": json!]
+            save()
+            return .success(Fetched(json: json!, age: 0, retryIn: nil))
+        case 429:
+            let wait = retryAfter ?? 300
+            cache["retryUntil"] = now + wait
+            save()
+            return body.map { .success(Fetched(json: $0, age: age, retryIn: wait)) } ?? .failure(.limited(wait))
+        case 401, 403:
+            return .failure(.signIn)
+        default:
+            return body.map { .success(Fetched(json: $0, age: age, retryIn: nil)) } ?? .failure(.unavailable)
+        }
+    }
+
+    private static func fileAge(_ url: URL) -> TimeInterval? {
+        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate).map { -$0.timeIntervalSinceNow }
+    }
+
+    /// Blocking fetch on the caller's (background) thread: status (0 on a network error), the
+    /// JSON body if any, and Retry-After in seconds.
+    private static func fetch(_ req: URLRequest) -> (Int, [String: Any]?, TimeInterval?) {
+        let done = DispatchSemaphore(value: 0)
+        var result: (Int, [String: Any]?, TimeInterval?) = (0, nil, nil)
+        URLSession.shared.dataTask(with: req) { data, resp, _ in
+            let http = resp as? HTTPURLResponse
+            let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            let retry = (http?.value(forHTTPHeaderField: "Retry-After")).flatMap(Double.init)
+            result = (http?.statusCode ?? 0, json, retry)
             done.signal()
         }.resume()
         _ = done.wait(timeout: .now() + req.timeoutInterval + 1)
