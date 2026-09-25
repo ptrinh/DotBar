@@ -145,6 +145,7 @@ enum AIUsage {
 
     private static func codex() -> String {
         let sym = "usage:0:0:Codex"
+        guard !Recipes.isChinaStorefront else { return notice(sym, "Codex usage is not available in your region") }
         let auth: Data?
         if Recipes.isSandboxed {
             guard let bookmark = UserDefaults.standard.data(forKey: codexBookmarkKey) else {

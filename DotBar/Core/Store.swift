@@ -81,7 +81,7 @@ enum Store {
     private static func detectedAIUsageItem() -> Item? {
         guard !Recipes.isSandboxed else { return nil }        // the recipes read other apps' sign-ins
         if hasClaudeCodeSignIn { return Recipes.aiUsage }
-        if hasCodexSignIn { return Recipes.codexUsage }
+        if hasCodexSignIn, !Recipes.isChinaStorefront { return Recipes.codexUsage }
         return nil
     }
 

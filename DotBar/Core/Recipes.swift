@@ -1,4 +1,5 @@
 import Foundation
+import StoreKit
 
 /// Ready-made items the user can drop into the menu bar from Preferences.
 /// Every command is verified against /bin/zsh -c with ScriptRunner's PATH.
@@ -10,6 +11,13 @@ enum Recipes {
     /// `open`; the container home is there either way.
     static let isSandboxed = ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
         || NSHomeDirectory().contains("/Library/Containers/")
+
+    /// App Store build on the China mainland storefront, where ChatGPT-related functionality must
+    /// be off (App Review, guideline 5): the Codex usage preset is hidden there.
+    static let isChinaStorefront: Bool = isSandboxed && SKPaymentQueue.default().storefront?.countryCode == "CHN"
+
+    /// Presets that must not be offered on the current storefront.
+    static var regionUnavailable: Set<String> { isChinaStorefront ? ["AI Usage Icon (Codex)"] : [] }
 
     /// CPU % : `iostat` over one second outside the sandbox (≈0.01 s CPU per run; `top -l 1`
     /// cost ≈0.75 s, run every few seconds by several recipes), 1-minute load average / core
@@ -50,6 +58,7 @@ enum Recipes {
          // Dev & streaming
          gitBranch, pingStream, logTail]
             .filter { !isSandboxed || !sandboxUnavailable.contains($0.name) }
+            .filter { !regionUnavailable.contains($0.name) }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
