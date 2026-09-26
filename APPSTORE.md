@@ -9,7 +9,7 @@ Build: `scripts/appstore.sh <version> export` (pkg in dist/appstore) or `scripts
 
 ## Metadata draft
 - **Name**: DotBar: AI Stats Menu
-- **Subtitle** (30 max): Claude & Codex usage limits
+- **Subtitle** (30 max, no other developers' brand names — guideline 4.1(c)): AI usage limits at a glance
 - **Category**: Utilities (secondary: Developer Tools)
 - **Price**: Free (or your choice)
 - **Privacy policy URL**: https://github.com/ptrinh/DotBar/blob/main/PRIVACY.md
