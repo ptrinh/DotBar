@@ -119,12 +119,12 @@ private struct AIStep: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Your AI limits, always in sight").font(.title2.bold())
-            Text("Two bars: the top one is your current 5-hour session, the bottom one your week. They turn red from 90%, and a click shows exact numbers and reset times.")
+            Text("Two bars: the top one is your current 5-hour session, the bottom one your week. The shaded part is time already gone, so any fill past it means you are ahead of pace. Red from 90%; a click shows exact numbers and reset times.")
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 28) {
-                IconPreview(item: Recipes.aiUsage, output: #"{"text":"","symbol":"usage:38:64:Claude"}"#)
+                IconPreview(item: Recipes.aiUsage, output: #"{"text":"","symbol":"usage:70/50:40/30:Claude"}"#)
                 if AIChoice.available.contains(.codex) {
-                    IconPreview(item: Recipes.codexUsage, output: #"{"text":"","symbol":"usage:12:47:Codex"}"#)
+                    IconPreview(item: Recipes.codexUsage, output: #"{"text":"","symbol":"usage:12/35:47/60:Codex"}"#)
                 }
             }
             .frame(maxWidth: .infinity).padding(.vertical, 8)

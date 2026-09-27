@@ -56,7 +56,8 @@ many working examples.
   `text` may contain `\n` for two small stacked lines.
 - **Drawn symbols**: `"symbol":"calendar:<day>[:<label>[:<color>]]"`,
   `"symbol":"battery:<percent>[:charging|:plugged][:lowpower]"`,
-  `"symbol":"usage:<top>:<bottom>[:<label>]"` (two progress bars, 0–100, optional label above).
+  `"symbol":"usage:<top>:<bottom>[:<label>]"` (two progress bars, 0–100, optional label above;
+  a value may be `used/elapsed`, e.g. `70/50`, to shade the time already gone).
 
 ## AI usage
 

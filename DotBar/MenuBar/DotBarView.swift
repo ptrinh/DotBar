@@ -426,11 +426,17 @@ final class DotBarView: NSView {
     /// `symbol: "usage:<top>:<bottom>[:<label>]"`: two parallel progress bars like "=" (e.g. AI
     /// session and weekly usage, 0–100), with an optional small label above (e.g. "Claude").
     /// Ink over a grey track; red from 90%. Edges snapped to device pixels.
+    /// A value may be `used/elapsed` (e.g. `70/50`): the first `elapsed` percent of the bar gets a
+    /// contrasting shade, so the part of the fill beyond it is usage ahead of the clock.
     private static func usageAttachment(_ name: String, color: NSColor, font base: NSFont) -> NSAttributedString? {
         guard name.hasPrefix("usage:") else { return nil }
         var parts = name.dropFirst("usage:".count).split(separator: ":", omittingEmptySubsequences: false).map(String.init)
-        let label = parts.count > 1 && Double(parts.last!) == nil ? parts.removeLast() : ""
-        let values = parts.map { min(max(Double($0) ?? 0, 0), 100) }
+        let label = parts.count > 1 && parts.last!.contains(where: \.isLetter) ? parts.removeLast() : ""
+        func pct(_ s: Substring?) -> Double? { s.flatMap { Double($0) }.map { min(max($0, 0), 100) } }
+        let values: [(used: Double, elapsed: Double?)] = parts.map { p in
+            let pair = p.split(separator: "/", maxSplits: 1)
+            return (pct(pair.first) ?? 0, pct(pair.count > 1 ? pair[1] : nil))
+        }
         guard !values.isEmpty else { return nil }
         let lf = NSFont.systemFont(ofSize: round(base.pointSize * 0.55 * 2) / 2, weight: .semibold)
         let labelStr = NSAttributedString(string: label, attributes: [.font: lf, .foregroundColor: color, .kern: 0.2])
@@ -448,15 +454,23 @@ final class DotBarView: NSView {
                 labelStr.draw(at: NSPoint(x: px((w - labelStr.size().width) / 2), y: px(lf.capHeight) - lf.ascender))
             }
             let top = labelH + labelGap
+            // Time shade: darker over a light ink (dark menu bar), lighter over a dark ink.
+            let dark = NSAppearance.currentDrawing().bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let shade = dark ? NSColor.black.withAlphaComponent(0.3) : NSColor.white.withAlphaComponent(0.35)
             for (i, v) in values.enumerated() {
                 let bar = NSRect(x: 0, y: px(top + CGFloat(i) * (barH + gap)), width: w, height: barH)
                 let track = NSBezierPath(roundedRect: bar, xRadius: barH / 2, yRadius: barH / 2)
                 color.withAlphaComponent(0.35).setFill(); track.fill()
-                guard v > 0 else { continue }
                 NSGraphicsContext.saveGraphicsState()
                 track.addClip()
-                (v >= 90 ? NSColor.systemRed : color).setFill()
-                NSRect(x: 0, y: bar.minY, width: max(px(w * v / 100), barH), height: barH).fill()
+                if v.used > 0 {
+                    (v.used >= 90 ? NSColor.systemRed : color).setFill()
+                    NSRect(x: 0, y: bar.minY, width: max(px(w * v.used / 100), barH), height: barH).fill()
+                }
+                if let e = v.elapsed, e > 0 {
+                    shade.setFill()
+                    NSRect(x: 0, y: bar.minY, width: px(w * e / 100), height: barH).fill()
+                }
                 NSGraphicsContext.restoreGraphicsState()
             }
             return true

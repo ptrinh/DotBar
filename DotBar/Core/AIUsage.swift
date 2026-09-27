@@ -197,7 +197,9 @@ enum AIUsage {
             // From reset_at, not reset_after_seconds: the response may come from the cache.
             let sessionLeft = number(j, "rate_limit", "primary_window", "reset_at").map { $0 - Date().timeIntervalSince1970 }
             let weekly = number(j, "rate_limit", "secondary_window", "reset_at").map { Date(timeIntervalSince1970: $0) }
-            return report("Codex", s, w, sessionLeft, weekly, page: "https://chatgpt.com/codex/settings/usage", note: f.note)
+            return report("Codex", s, w, sessionLeft, weekly, page: "https://chatgpt.com/codex/settings/usage", note: f.note,
+                          sessionWindow: number(j, "rate_limit", "primary_window", "limit_window_seconds") ?? 5 * 3600,
+                          weeklyWindow: number(j, "rate_limit", "secondary_window", "limit_window_seconds") ?? 7 * 86_400)
         }
     }
 
@@ -232,12 +234,23 @@ enum AIUsage {
 
     private static func report(_ label: String, _ session: Double, _ weekly: Double,
                                _ sessionLeft: TimeInterval?, _ weeklyReset: Date?, page: String,
-                               note: String? = nil) -> String {
-        var menu = ["Session \(pct(session))  ·  resets in \(duration(sessionLeft))",
-                    "Weekly \(pct(weekly))  ·  resets \(weeklyReset.map(weekday) ?? "—")"]
+                               note: String? = nil,
+                               sessionWindow: TimeInterval = 5 * 3600, weeklyWindow: TimeInterval = 7 * 86_400) -> String {
+        // Share of each window already gone, from its reset time: the bars shade that part.
+        func elapsed(_ left: TimeInterval?, _ window: TimeInterval) -> Double? {
+            guard let left, window > 0 else { return nil }
+            return min(max(1 - left / window, 0), 1) * 100
+        }
+        let sE = elapsed(sessionLeft, sessionWindow), wE = elapsed(weeklyReset.map { $0.timeIntervalSinceNow }, weeklyWindow)
+        func time(_ e: Double?) -> String { e.map { "  ·  \(pct($0)) of time" } ?? "" }
+        var menu = ["Session \(pct(session))\(time(sE))  ·  resets in \(duration(sessionLeft))",
+                    "Weekly \(pct(weekly))\(time(wE))  ·  resets \(weeklyReset.map(weekday) ?? "—")"]
         if let note { menu.append(note) }
         menu += ["---", "Open usage page | href=\(page)"]
-        return json(["text": "", "symbol": "usage:\(Int(session.rounded())):\(Int(weekly.rounded())):\(label)", "menu": menu])
+        func value(_ used: Double, _ e: Double?) -> String {
+            "\(Int(used.rounded()))" + (e.map { "/\(Int($0.rounded()))" } ?? "")
+        }
+        return json(["text": "", "symbol": "usage:\(value(session, sE)):\(value(weekly, wE)):\(label)", "menu": menu])
     }
 
     private static func notice(_ symbol: String, _ line: String, enabled: Bool = false) -> String {

@@ -37,7 +37,7 @@ A `text` containing `\n` is drawn as small lines stacked to fit the bar, e.g. `{
 |---|---|
 | `calendar:<day>` | day number under a faint strip, sized to two stacked lines |
 | `calendar:<day>:<label>[:<color>]` | `label` (e.g. weekday) in the strip, day number below; `color` (`black`, `red`, `blue`, `#hex`, `light,dark` pair…) fills the strip, empty = subtle monochrome |
-| `usage:<top>:<bottom>[:<label>]` | two parallel progress bars like `=` (0–100 each), optional small label above (e.g. `Claude`); red from 90% |
+| `usage:<top>:<bottom>[:<label>]` | two parallel progress bars like `=` (0–100 each), optional small label above (e.g. `Claude`); red from 90%. A value may be `used/elapsed` (e.g. `70/50`): the first *elapsed* % of the bar is shaded, so fill past the shade is usage ahead of the clock |
 | `battery:<percent>[:charging\|:plugged][:lowpower]` | the macOS 27 battery turned upright: slim solid pill, level over a grey track; red at ≤ 20% on battery, bolt while charging, plug when on power but not charging; add `:lowpower` for the yellow Low Power Mode fill |
 
 For the number-range rules, DotBar parses the **first number** in the output — so `"14%"`,
