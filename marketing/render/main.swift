@@ -32,8 +32,8 @@ func run() {
     func fixed(_ item: Item, _ output: String) -> Item {
         var i = item; i.source = .static(text: output); return i
     }
-    let claude = fixed(preset("AI Usage Icon (Claude)"), #"{"text":"","symbol":"usage:38:64:Claude"}"#)
-    let codex = fixed(preset("AI Usage Icon (Codex)"), #"{"text":"","symbol":"usage:12:47:Codex"}"#)
+    let claude = fixed(preset("AI Usage Icon (Claude)"), #"{"text":"","symbol":"usage:38/55:64/70:Claude"}"#)
+    let codex = fixed(preset("AI Usage Icon (Codex)"), #"{"text":"","symbol":"usage:12/35:47/60:Codex"}"#)
     var battery = fixed(preset("Battery + CPU/RAM dots"), #"{"text":"","symbol":"battery:82"}"#)
     // Deterministic dot inputs (the real recipe runs iostat / vm_stat).
     battery.dots[0].source = .script(command: "echo 86", refreshSeconds: 10)
@@ -74,9 +74,13 @@ func run() {
     }
 
     func renderStrip(_ item: Item, name: String, scale: CGFloat = 4) {
-        dark.performAsCurrentDrawingAppearance {
+        // Vibrant, like a live menu bar: plain darkAqua is what macOS uses for the copy of an item
+        // on an inactive display, which DotBarView draws dimmed.
+        let live = NSAppearance(named: .vibrantDark)!
+        live.performAsCurrentDrawingAppearance {
             MainActor.assumeIsolated {
                 let v = DotBarView(frame: .zero)
+                v.appearance = live
                 v.configure(item: item, output: state.output(for: item), dotColors: dotColors(item))
                 let h: CGFloat = 24
                 let w = ceil(v.intrinsicContentSize.width)
