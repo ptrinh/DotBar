@@ -73,6 +73,20 @@ enum Store {
     /// First launch: battery icon with CPU/RAM dots, plus the calendar icon. On a Mac without a
     /// battery the battery command prints nothing, so only the two dots show. The AI usage icon
     /// is added when a supported AI sign-in is found.
+    /// Brings untouched copies of presets up to date. Today: in the sandbox, the battery item's
+    /// menu details gain "Open Activity Monitor" rows (it cannot list processes itself). A menu
+    /// command the user edited no longer starts with the preset's, so it is left alone.
+    static func migratePresets(_ items: [Item]) -> [Item] {
+        guard Recipes.isSandboxed else { return items }
+        let preset = Recipes.batteryWithLoadDots
+        let head = String(preset.menuCommand.prefix(120))
+        return items.map { item in
+            guard item.name == preset.name, item.menuCommand.hasPrefix(head),
+                  item.menuCommand.contains(#"echo "CPU "#), !item.menuCommand.contains("Activity Monitor") else { return item }
+            var i = item; i.menuCommand = preset.menuCommand; return i
+        }
+    }
+
     static func defaults() -> [Item] {
         var items = [Recipes.batteryWithLoadDots, Recipes.calendarIcon]
         if let ai = detectedAIUsageItem() { items.append(ai) }

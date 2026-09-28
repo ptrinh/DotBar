@@ -325,10 +325,12 @@ dotbar usage claude
 DotBar runs this in-process. The Homebrew build reads the sign-in Claude Code already stored
 (Keychain, or `~/.claude/.credentials.json`) and calls the usage endpoint Claude Code uses.
 The Mac App Store build cannot reach Claude Code's Keychain item, so the menu offers a one-time
-**Set up Claude usage…**: you pick `~/.claude`, and DotBar adds a small `Stop` hook to Claude Code's
-`settings.json` (backup: `settings.json.dotbar-bak`). After each Claude Code reply, at most every
-2 minutes, the hook saves the usage response, not the sign-in, to `~/.claude/dotbar-usage.json`,
-which DotBar reads.
+**Set up Claude usage…**: you pick `~/.claude`, and DotBar adds a small hook to Claude Code's
+`settings.json` (`SessionStart`, `UserPromptSubmit` and `Stop`; backup: `settings.json.dotbar-bak`).
+Whenever you open Claude Code, send a prompt or get a reply, at most once every 2 minutes, the
+hook saves the usage response, not the sign-in, to `~/.claude/dotbar-usage.json`, which DotBar
+reads. DotBar updates an installed hook at launch. The sandbox cannot list processes, so the
+battery item's CPU/RAM submenus offer *Open Activity Monitor* there.
 
 ### AI Usage Icon (Codex) — every 180s (added on first launch when Codex CLI is signed in and Claude Code is not)
 Codex (ChatGPT plan) session (5 h, top bar) and weekly (bottom bar) usage. Click for % and reset times.

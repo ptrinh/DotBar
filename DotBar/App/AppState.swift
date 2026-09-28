@@ -65,6 +65,8 @@ final class AppState: ObservableObject {
         suppressPersist = true
         items = Store.load()
         suppressPersist = false
+        let migrated = Store.migratePresets(items)
+        if migrated != items { items = migrated }             // saved, so the CLI and next launch see it
         syncControllers()
         syncHotkeys()
         syncStreams()
@@ -76,6 +78,7 @@ final class AppState: ObservableObject {
         isStarting = false
         staggeredRefreshAll()
         for item in items where item.enabled && !item.menuCommand.isEmpty { refreshMenuDetails(item) }
+        Task.detached(priority: .utility) { AIUsage.upgradeClaudeHookIfInstalled() }
     }
 
     /// Runs the item's `menuCommand` in the background and caches its lines; `done` gets the

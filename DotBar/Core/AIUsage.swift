@@ -80,7 +80,7 @@ enum AIUsage {
         guard let data = try? Data(contentsOf: file),
               let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let s = number(j, "five_hour", "utilization"), let w = number(j, "seven_day", "utilization") else {
-            return notice(sym, "Waiting for Claude Code — usage updates after its next reply")
+            return notice(sym, "Waiting for Claude Code — usage appears once you use it (open it or send a prompt)")
         }
         let age = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate).map { -$0.timeIntervalSinceNow }
         let sessionLeft = (string(j, "five_hour", "resets_at").flatMap(isoDate)).map { $0.timeIntervalSinceNow }
@@ -95,9 +95,13 @@ enum AIUsage {
     static let claudeHookScript = """
     #!/bin/sh
     # Written by DotBar: saves Claude usage for the DotBar menu bar icon. Safe to delete
-    # (then remove the matching "Stop" hook from ~/.claude/settings.json).
+    # (then remove the matching hooks that run this file from ~/.claude/settings.json).
     out="$HOME/.claude/\(claudeUsageFile)"
-    [ -n "$(find "$out" -mmin -2 2>/dev/null)" ] && exit 0
+    stamp="$out.try"
+    # At most one request every 2 minutes, counted from the last attempt: a rate-limited
+    # (429) answer writes nothing, and retrying on every event would only prolong it.
+    [ -n "$(find "$stamp" -mmin -2 2>/dev/null)" ] && exit 0
+    touch "$stamp"
     (
       c=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null || cat "$HOME/.claude/.credentials.json" 2>/dev/null)
       t=$(printf %s "$c" | plutil -extract claudeAiOauth.accessToken raw -o - - 2>/dev/null)
@@ -111,39 +115,68 @@ enum AIUsage {
 
     """
 
+    /// Claude Code events that run the hook: opening a session and sending a prompt give numbers
+    /// right away; the end of each reply keeps them current.
+    static let claudeHookEvents = ["SessionStart", "UserPromptSubmit", "Stop"]
+
     /// Writes the hook script into the granted ~/.claude and adds it to settings.json's `Stop`
     /// hooks (once; the previous settings.json is kept as settings.json.dotbar-bak).
     static func installClaudeHook(in dir: URL) throws {
         let fm = FileManager.default
         let script = dir.appendingPathComponent(claudeHookFile)
-        try claudeHookScript.write(to: script, atomically: true, encoding: .utf8)
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        if (try? String(contentsOf: script, encoding: .utf8)) != claudeHookScript {
+            try claudeHookScript.write(to: script, atomically: true, encoding: .utf8)
+            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        }
 
         let settingsURL = dir.appendingPathComponent("settings.json")
         var settings: [String: Any] = [:]
-        if let data = try? Data(contentsOf: settingsURL) {
-            guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        let existing = try? Data(contentsOf: settingsURL)
+        if let existing {
+            guard let obj = try JSONSerialization.jsonObject(with: existing) as? [String: Any] else {
                 throw NSError(domain: "DotBar", code: 1, userInfo: [NSLocalizedDescriptionKey: "~/.claude/settings.json is not a JSON object"])
             }
             settings = obj
+        }
+        let command = "sh ~/.claude/\(claudeHookFile)"
+        var hooks = settings["hooks"] as? [String: Any] ?? [:]
+        var changed = false
+        for event in claudeHookEvents {
+            var groups = hooks[event] as? [[String: Any]] ?? []
+            let installed = groups.contains { group in
+                (group["hooks"] as? [[String: Any]] ?? []).contains { ($0["command"] as? String)?.contains(claudeHookFile) == true }
+            }
+            guard !installed else { continue }
+            groups.append(["hooks": [["type": "command", "command": command]]])
+            hooks[event] = groups
+            changed = true
+        }
+        guard changed else { return }                         // already current: leave settings.json alone
+        if existing != nil {
             let backup = dir.appendingPathComponent("settings.json.dotbar-bak")
             try? fm.removeItem(at: backup)
             try fm.copyItem(at: settingsURL, to: backup)
         }
-        let command = "sh ~/.claude/\(claudeHookFile)"
-        var hooks = settings["hooks"] as? [String: Any] ?? [:]
-        var stop = hooks["Stop"] as? [[String: Any]] ?? []
-        let installed = stop.contains { group in
-            (group["hooks"] as? [[String: Any]] ?? []).contains { ($0["command"] as? String)?.contains(claudeHookFile) == true }
-        }
-        guard !installed else { return }
-        stop.append(["hooks": [["type": "command", "command": command]]])
-        hooks["Stop"] = stop
         settings["hooks"] = hooks
         let out = try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
         let perms = (try? fm.attributesOfItem(atPath: settingsURL.path))?[.posixPermissions]
         try out.write(to: settingsURL, options: .atomic)
         if let perms { try? fm.setAttributes([.posixPermissions: perms], ofItemAtPath: settingsURL.path) }
+    }
+
+    /// At launch: bring an already-installed hook up to date (new events, new script). Only where
+    /// the user set it up: the App Store build's granted ~/.claude, or an existing hook script.
+    static func upgradeClaudeHookIfInstalled() {
+        if Recipes.isSandboxed {
+            guard let bookmark = UserDefaults.standard.data(forKey: claudeDirBookmarkKey),
+                  let dir = resolve(bookmark, key: claudeDirBookmarkKey) else { return }
+            defer { dir.stopAccessingSecurityScopedResource() }
+            try? installClaudeHook(in: dir)
+        } else {
+            let dir = realHome.appendingPathComponent(".claude", isDirectory: true)
+            guard FileManager.default.fileExists(atPath: dir.appendingPathComponent(claudeHookFile).path) else { return }
+            try? installClaudeHook(in: dir)
+        }
     }
 
     /// Keychain via the `security` tool (it is on the item's access list, so no prompt), then
