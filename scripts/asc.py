@@ -1,6 +1,6 @@
 """Minimal App Store Connect API client for the DotBar listing.
 
-Reads the API key from .release.env (ASC_KEY, ASC_KEY_ID, ASC_ISSUER). Needs `pip install "pyjwt[crypto]"`.
+Reads ASC_KEY_ID / ASC_ISSUER from .release.env and the key file from $ASC_KEY_PATH (touchenv). Needs `pip install "pyjwt[crypto]"`.
 Import it (`from asc import *`) from a small script; see APPSTORE.md for what still needs the web UI.
 """
 import hashlib, json, os, time, urllib.request, urllib.error
@@ -13,6 +13,11 @@ for line in open(os.path.join(ROOT, '.release.env')):
     if '=' in line and not line.startswith('#'):
         k, v = line.split('=', 1)
         ENV[k.replace('export ', '').strip()] = os.path.expandvars(os.path.expanduser(v.strip().strip('"').strip("'")))
+
+# The .p8 lives in the Keychain behind Touch ID: run under
+#   touchenv run --intent "…" ASC_KEY_PATH:file -- python3 …
+if os.environ.get('ASC_KEY_PATH'):
+    ENV['ASC_KEY'] = os.environ['ASC_KEY_PATH']
 
 APP_ID = '6814083243'
 BASE = 'https://api.appstoreconnect.apple.com'

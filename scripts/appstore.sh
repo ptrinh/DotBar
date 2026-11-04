@@ -8,8 +8,11 @@ set -euo pipefail
 VERSION="${1:?usage: appstore.sh <version> [upload]}"; MODE="${2:-export}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 [[ -f .release.env ]] && source .release.env
+# The .p8 lives in the Keychain behind Touch ID: run this script through
+#   touchenv run --intent "DotBar release" ASC_KEY_PATH:file -- <this script> …
+ASC_KEY="${ASC_KEY_PATH:-${ASC_KEY:-}}"
 : "${TEAM_ID:?}" "${ASC_KEY:?}" "${ASC_KEY_ID:?}" "${ASC_ISSUER:?}"
-MAS_PROFILE="${MAS_PROFILE:-DotBar Mac App Store uk}"
+MAS_PROFILE="${MAS_PROFILE:-DotBar Mac App Store 2026-10}"
 INSTALLER_CERT="${INSTALLER_CERT:-3rd Party Mac Developer Installer}"
 OUT="$ROOT/dist/appstore"; ARCHIVE="$OUT/DotBar.xcarchive"
 BUILD_NO=$(git rev-list --count HEAD)

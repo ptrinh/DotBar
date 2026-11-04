@@ -1,7 +1,8 @@
 #!/bin/zsh
 # Release DotBar: build (Developer ID, hardened runtime) -> notarize -> staple -> zip -> GitHub Release -> update Homebrew cask.
 # Usage: scripts/release.sh 0.1.0
-# Credentials come from the environment (or an untracked .release.env next to this repo root):
+# Credentials come from the environment (or an untracked .release.env next to this repo root;
+# the API key itself comes from touchenv as ASC_KEY_PATH, see below):
 #   SIGN_ID      "Developer ID Application: Name (TEAMID)"
 #   TEAM_ID      Apple team id
 #   ASC_KEY      path to App Store Connect API key (.p8)
@@ -12,6 +13,9 @@ set -euo pipefail
 VERSION="${1:?usage: release.sh <version>}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 [[ -f "$ROOT/.release.env" ]] && source "$ROOT/.release.env"
+# The .p8 lives in the Keychain behind Touch ID: run this script through
+#   touchenv run --intent "DotBar release" ASC_KEY_PATH:file -- <this script> …
+ASC_KEY="${ASC_KEY_PATH:-${ASC_KEY:-}}"
 : "${SIGN_ID:?set SIGN_ID}" "${TEAM_ID:?set TEAM_ID}"
 if [[ "${NOTARIZE:-1}" == "1" ]]; then : "${ASC_KEY:?set ASC_KEY}" "${ASC_KEY_ID:?set ASC_KEY_ID}" "${ASC_ISSUER:?set ASC_ISSUER}"; fi
 TAP_DIR="${TAP_DIR:-$ROOT/../homebrew-tap}"
