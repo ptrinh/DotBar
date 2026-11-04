@@ -75,7 +75,10 @@ lists, API calls) instead of in the refresh-timer command.
 DotBar idles at ~0% CPU; a command on a timer is where cost comes from.
 
 - Pick the longest `refreshSeconds` that still feels live; 0 = manual.
-- Avoid `top -l 1` (≈0.75 s CPU per run); CPU % via
-  `iostat -c 2 -w 1 | tail -1 | awk '{printf "%.0f", 100 - $(NF-3)}'`.
+- For CPU % or memory used %, use the command `dotbar cpu` / `dotbar ram` (exactly that): it
+  runs in-process, no child process at all, and works in the sandbox. Avoid `top -l 1`
+  (≈0.75 s CPU per run).
+- An item's timer ticks at the shortest interval among its script and its dots, but each
+  source only runs once its own `refreshSeconds` is up.
 - `ps`, `osascript`, `ipconfig`, `git` are denied in the Mac App Store (sandboxed) build.
 - Never launch apps from a timer command (guard AppleScript with `if application "X" is running`).

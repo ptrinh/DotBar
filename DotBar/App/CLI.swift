@@ -28,6 +28,7 @@ enum CLI {
       dotbar remove <item>
       dotbar test <item|command> [--json]  run it and show how DotBar reads the output
       dotbar usage <claude|codex>          AI session / weekly usage as DotBar JSON
+      dotbar cpu | dotbar ram              CPU busy % / memory used %, as a bare number
       dotbar schema                        JSON Schema of items.json
       dotbar path                          location of items.json
 
@@ -76,6 +77,7 @@ enum CLI {
             print("removed \(target.name)")
         case "test": try test(rest, json: json)
         case "usage": print(AIUsage.output(for: try one(rest)))
+        case "cpu", "ram": print(SystemStats.output(for: cmd) ?? "")
         default: throw Failure(message: "unknown command \"\(cmd)\"\n\n\(usage)", code: 2)
         }
     }

@@ -144,7 +144,6 @@ enum Recipes {
     /// First 3 digits of the BTC price as text; dot 1 fades transparent -> red with CPU %, dot 2 transparent -> yellow with RAM %.
     /// Battery icon with CPU (C) and RAM (M) dots that fade in above 40% / 50%.
     static var batteryWithLoadDots: Item {
-        let ram = #"vm_stat | awk '/Pages free/{f=$3} /Pages active/{a=$3} /Pages inactive/{i=$3} /Pages speculative/{s=$3} /Pages wired down/{w=$4} /Pages occupied by compressor/{c=$5} END{gsub(/[^0-9]/,"",f);gsub(/[^0-9]/,"",a);gsub(/[^0-9]/,"",i);gsub(/[^0-9]/,"",s);gsub(/[^0-9]/,"",w);gsub(/[^0-9]/,"",c); t=f+a+i+s+w+c; if (t>0) printf "%.0f", (a+w+c)*100/t}'"#
         var i = batteryIcon
         i.name = "Battery + CPU/RAM dots"
         // Menu adds CPU and RAM (share of physical memory, as Activity Monitor's "Memory Used").
@@ -158,9 +157,9 @@ enum Recipes {
         i.menuCommand += #"; echo "CPU $("# + cpuPercentCommand + #")%""# + cpuTop + #"; echo "$("# + ramLine + #")""# + ramTop
         i.hideWhenEmpty = false          // no battery: the icon is simply absent, the dots stay
         i.dots = [
-            Dot(source: .script(command: cpuPercentCommand, refreshSeconds: 10),
+            Dot(source: .script(command: "dotbar cpu", refreshSeconds: 10),
                 color: .gradient(min: 40, max: 100, from: "#FF453A00", to: "#FF453A"), label: "C"),
-            Dot(source: .script(command: ram, refreshSeconds: 15),
+            Dot(source: .script(command: "dotbar ram", refreshSeconds: 15),
                 color: .gradient(min: 50, max: 100, from: "#FFD60A00", to: "#FFD60A"), label: "M"),
         ]
         i.dotSize = 7

@@ -15,6 +15,10 @@ enum ScriptRunner {
         if words.count == 3, words[0] == "dotbar", words[1] == "usage" {
             return .parse(AIUsage.output(for: String(words[2])))
         }
+        // `dotbar cpu` / `dotbar ram`: Mach host statistics, no child processes at all.
+        if words.count == 2, words[0] == "dotbar", let out = SystemStats.output(for: String(words[1])) {
+            return .parse(out)
+        }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
         p.arguments = ["-c", command]

@@ -162,10 +162,13 @@ echo "$(vm_stat | awk -v total="$(sysctl -n hw.memsize)" '/page size of/{ps=$8} 
 ```
 Dot 1 fades from transparent (≤40%) to red (100%) with CPU, dot 2 from transparent (≤50%) to yellow with RAM. Uses the **Gradient** color mode: pick "Gradient", set the value range (40 → 100 / 50 → 100) and the two end colors; alpha is interpolated, so a `#RRGGBB00` start fades in.
 ```sh
-# dot 1 (own script, every 10s)
-iostat -c 2 -w 1 | tail -1 | awk '{printf "%.0f", 100 - $(NF-3)}'
-# dot 2 (own script, every 15s): see "Memory used %" above, without the trailing %
+# dot 1 (own script, every 10s): CPU busy %, read in-process — no child process
+dotbar cpu
+# dot 2 (own script, every 15s): memory used %, same figure as "Memory used %" above
+dotbar ram
 ```
+`dotbar cpu` / `dotbar ram` must be the whole command: DotBar then answers it itself from Mach
+host statistics instead of starting a shell (it also works in the sandboxed build).
 
 ### BTC 3 digits — every 60s
 Only the first three digits of the price (`80574` → `805`). Compact, no `jq`.

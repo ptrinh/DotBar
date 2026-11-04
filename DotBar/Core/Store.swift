@@ -76,16 +76,33 @@ enum Store {
     /// Brings untouched copies of presets up to date. Today: in the sandbox, the battery item's
     /// menu details gain "Open Activity Monitor" rows (it cannot list processes itself). A menu
     /// command the user edited no longer starts with the preset's, so it is left alone.
+    /// Also: the battery item's CPU / RAM dots move from shell pipelines (a zsh + sysctl/vm_stat +
+    /// awk fork every 10–15 s) to the in-process `dotbar cpu` / `dotbar ram`. Only dot commands
+    /// that are exactly an old preset's are replaced.
     static func migratePresets(_ items: [Item]) -> [Item] {
-        guard Recipes.isSandboxed else { return items }
         let preset = Recipes.batteryWithLoadDots
         let head = String(preset.menuCommand.prefix(120))
         return items.map { item in
-            guard item.name == preset.name, item.menuCommand.hasPrefix(head),
-                  item.menuCommand.contains(#"echo "CPU "#), !item.menuCommand.contains("Activity Monitor") else { return item }
-            var i = item; i.menuCommand = preset.menuCommand; return i
+            var i = item
+            if Recipes.isSandboxed, item.name == preset.name, item.menuCommand.hasPrefix(head),
+               item.menuCommand.contains(#"echo "CPU "#), !item.menuCommand.contains("Activity Monitor") {
+                i.menuCommand = preset.menuCommand
+            }
+            for d in i.dots.indices {
+                guard case .script(let cmd, let secs) = i.dots[d].source,
+                      let new = legacyStatCommands[cmd] else { continue }
+                i.dots[d].source = .script(command: new, refreshSeconds: secs)
+            }
+            return i
         }
     }
+
+    /// Shell commands earlier presets used for CPU / RAM dots → their in-process replacement.
+    private static let legacyStatCommands: [String: String] = [
+        #"awk -v l="$(sysctl -n vm.loadavg | awk '{print $2}')" -v n="$(sysctl -n hw.ncpu)" 'BEGIN{p=l/n*100; if(p>100)p=100; printf "%.0f", p}'"#: "dotbar cpu",
+        #"iostat -c 2 -w 1 | tail -1 | awk '{printf "%.0f", 100 - $(NF-3)}'"#: "dotbar cpu",
+        #"vm_stat | awk '/Pages free/{f=$3} /Pages active/{a=$3} /Pages inactive/{i=$3} /Pages speculative/{s=$3} /Pages wired down/{w=$4} /Pages occupied by compressor/{c=$5} END{gsub(/[^0-9]/,"",f);gsub(/[^0-9]/,"",a);gsub(/[^0-9]/,"",i);gsub(/[^0-9]/,"",s);gsub(/[^0-9]/,"",w);gsub(/[^0-9]/,"",c); t=f+a+i+s+w+c; if (t>0) printf "%.0f", (a+w+c)*100/t}'"#: "dotbar ram",
+    ]
 
     static func defaults() -> [Item] {
         var items = [Recipes.batteryWithLoadDots, Recipes.calendarIcon]

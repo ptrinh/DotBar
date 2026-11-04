@@ -38,6 +38,9 @@ final class AppState: ObservableObject {
     private var inFlight: Set<UUID> = []
     /// When each item's script last started, exported as DOTBAR_LAST_RUN.
     private var lastRun: [UUID: Date] = [:]
+    /// When each dot's own script last started: the item timer ticks at the shortest interval,
+    /// and each source runs only once its own interval is up.
+    private var dotLastRun: [UUID: Date] = [:]
     /// Last system wake, exported as DOTBAR_LAST_WAKE.
     private var lastWake: Date?
     /// True between willSleep and didWake: no timers are scheduled.
@@ -245,9 +248,26 @@ final class AppState: ObservableObject {
 
     func refreshAll() { for item in items where item.enabled { refresh(item) } }
 
-    func refresh(_ item: Item) {
+    /// `dueOnly` (the timer tick): skip sources whose own interval has not elapsed. Everything
+    /// else (launch, wake, "Refresh Now", URL commands) runs every source.
+    func refresh(_ item: Item, dueOnly: Bool = false) {
         let id = item.id
+        // The timer runs at the shortest interval among the item and its dots; half a tick of
+        // slack keeps a 60 s source on a 10 s timer from slipping to 70 s on timer jitter.
+        let tick = timers[id]?.timeInterval ?? 0
+        let now = Date()
+        func due(_ last: Date?, _ seconds: Int) -> Bool {
+            let interval = effectiveInterval(seconds)
+            guard interval > 0 else { return false }
+            guard let last else { return true }
+            return now.timeIntervalSince(last) >= TimeInterval(interval) - tick / 2
+        }
+        // A main script with no interval of its own follows the timer its dots set, as before.
+        let mainSeconds = refreshOverrides[id] ?? item.refreshSeconds
+        let runMain = !dueOnly || (item.source.isStream ? false : mainSeconds == 0 || due(lastRun[id], mainSeconds))
         switch item.source {
+        case _ where !runMain:
+            break
         case .static(let text):
             setOutput(.parse(text), for: id)
         case .script(let command, _):
@@ -269,10 +289,13 @@ final class AppState: ObservableObject {
             if let runner = streams[id] { runner.restart() } else { syncStreams() }
         }
         for dot in item.dots {
-            if case .script(let command, _) = dot.source {
+            if case .script(let command, let seconds) = dot.source {
                 let dotID = dot.id
                 guard !inFlight.contains(dotID) else { continue }
+                // A dot without its own interval follows the item's timer.
+                if dueOnly, seconds > 0, !due(dotLastRun[dotID], seconds) { continue }
                 inFlight.insert(dotID)
+                dotLastRun[dotID] = now
                 let env = scriptEnv(for: item)
                 Task.detached(priority: .utility) { [weak self] in
                     let out = await ScriptRunner.run(command, extra: env)
@@ -575,7 +598,7 @@ final class AppState: ObservableObject {
                       interval: TimeInterval(interval), repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let item = self.binding(for: id) else { return }
-                self.refresh(item)
+                self.refresh(item, dueOnly: true)
             }
         }
         t.tolerance = max(1, TimeInterval(interval) * 0.1)   // lets the OS coalesce wakeups
